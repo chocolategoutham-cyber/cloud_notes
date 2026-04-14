@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Cloud Notes is a GitHub-first encrypted PWA for private notes, passwords, and sensitive text."
+    />
+    <meta name="theme-color" content="#132238" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Cloud Notes" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>Cloud Notes</title>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero surface">
+        <div class="hero-copy">
+          <p class="eyebrow">GitHub-only encrypted vault</p>
+          <h1>Private notes, passwords, and snippets that stay encrypted before they ever touch GitHub.</h1>
+          <p class="lead">
+            Cloud Notes is a local-first progressive web app built for GitHub Pages. Your vault unlocks with a
+            master passphrase, lives offline, and syncs to GitHub only as encrypted JSON.
+          </p>
+          <div class="hero-status" id="hero-status">
+            <span class="pill">Offline-ready</span>
+            <span class="pill">AES-GCM encrypted</span>
+            <span class="pill">GitHub Pages friendly</span>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="ghost-button" id="install-button" hidden>Install App</button>
+          <button class="ghost-button" id="lock-button" hidden>Lock Vault</button>
+          <p class="mini-note" id="install-hint">Android browsers can install directly. On iPhone, use Share -> Add to Home Screen.</p>
+        </div>
+      </header>
+
+      <main class="main-grid">
+        <section class="surface auth-surface" id="auth-surface" aria-live="polite">
+          <div class="section-heading">
+            <p class="section-kicker">Secure access</p>
+            <h2 id="auth-title">Create your local vault</h2>
+          </div>
+
+          <div class="auth-panels">
+            <form id="setup-form" class="auth-form">
+              <label>
+                Master passphrase
+                <input id="setup-passphrase" name="setup-passphrase" type="password" minlength="10" autocomplete="new-password" required />
+              </label>
+              <label>
+                Confirm passphrase
+                <input id="setup-confirm" name="setup-confirm" type="password" minlength="10" autocomplete="new-password" required />
+              </label>
+              <button class="primary-button" type="submit">Create encrypted vault</button>
+              <p class="mini-note">
+                Choose a passphrase you can remember. It is not sent to GitHub and cannot be recovered by the app.
+              </p>
+            </form>
+
+            <form id="unlock-form" class="auth-form" hidden>
+              <label>
+                Master passphrase
+                <input id="unlock-passphrase" name="unlock-passphrase" type="password" autocomplete="current-password" required />
+              </label>
+              <button class="primary-button" type="submit">Unlock vault</button>
+              <p class="mini-note">
+                The encrypted vault stays on this device until you choose to sync it to GitHub.
+              </p>
+            </form>
+          </div>
+
+          <div class="security-grid">
+            <article class="security-card">
+              <h3>Local-first by default</h3>
+              <p>The app works offline and keeps only an encrypted payload in browser storage.</p>
+            </article>
+            <article class="security-card">
+              <h3>GitHub as encrypted backup</h3>
+              <p>Sync uses the GitHub Contents API, so only the encrypted vault file lands in your repository.</p>
+            </article>
+            <article class="security-card">
+              <h3>No secret token persistence</h3>
+              <p>Your GitHub token is kept only for the current tab session unless you paste it again later.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="app-shell" id="app-shell" hidden>
+          <div class="surface toolbar-surface">
+            <div class="toolbar-topline">
+              <div>
+                <p class="section-kicker">Vault workspace</p>
+                <h2 id="vault-headline">Your encrypted vault</h2>
+              </div>
+              <div class="toolbar-meta">
+                <div class="stat-chip">
+                  <span class="stat-label">Items</span>
+                  <strong id="item-count">0</strong>
+                </div>
+                <div class="stat-chip">
+                  <span class="stat-label">Passwords</span>
+                  <strong id="password-count">0</strong>
+                </div>
+                <div class="stat-chip">
+                  <span class="stat-label">Last save</span>
+                  <strong id="save-status">Never</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="toolbar-controls">
+              <label class="search-field">
+                <span>Search</span>
+                <input id="search-input" type="search" placeholder="Search title, notes, usernames, tags..." />
+              </label>
+
+              <div class="segmented" id="filter-group" role="group" aria-label="Vault filters">
+                <button class="segmented-button is-active" data-filter="all" type="button">All</button>
+                <button class="segmented-button" data-filter="note" type="button">Notes</button>
+                <button class="segmented-button" data-filter="password" type="button">Passwords</button>
+                <button class="segmented-button" data-filter="snippet" type="button">Snippets</button>
+              </div>
+
+              <label class="autolock-field">
+                <span>Auto-lock</span>
+                <select id="auto-lock-select">
+                  <option value="5">5 min</option>
+                  <option value="10">10 min</option>
+                  <option value="30">30 min</option>
+                  <option value="0">Off</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="quick-actions">
+              <button class="secondary-button" id="new-note-button" type="button">New note</button>
+              <button class="secondary-button" id="new-password-button" type="button">New password</button>
+              <button class="secondary-button" id="new-snippet-button" type="button">New private snippet</button>
+            </div>
+          </div>
+
+          <div class="workspace-grid">
+            <aside class="surface list-surface">
+              <div class="list-heading">
+                <div>
+                  <p class="section-kicker">Entries</p>
+                  <h3>Vault index</h3>
+                </div>
+                <span class="mini-note" id="visible-count">0 visible</span>
+              </div>
+              <div class="entry-list" id="entry-list" aria-live="polite"></div>
+            </aside>
+
+            <section class="surface editor-surface">
+              <div class="editor-heading">
+                <div>
+                  <p class="section-kicker">Editor</p>
+                  <h3 id="editor-title">Select or create an item</h3>
+                </div>
+                <span class="mini-note" id="editor-updated">No selection</span>
+              </div>
+
+              <form id="entry-form" class="editor-form" hidden>
+                <div class="editor-grid">
+                  <label>
+                    Type
+                    <select id="entry-type" name="entry-type">
+                      <option value="note">Note</option>
+                      <option value="password">Password</option>
+                      <option value="snippet">Private snippet</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Title
+                    <input id="entry-title" name="entry-title" type="text" maxlength="120" required />
+                  </label>
+
+                  <label class="wide-field">
+                    Tags
+                    <input id="entry-tags" name="entry-tags" type="text" placeholder="finance, travel, ssh" />
+                  </label>
+
+                  <label id="username-field" hidden>
+                    Username
+                    <input id="entry-username" name="entry-username" type="text" autocomplete="username" />
+                  </label>
+
+                  <label id="url-field" hidden>
+                    URL
+                    <input id="entry-url" name="entry-url" type="url" placeholder="https://example.com" />
+                  </label>
+
+                  <div class="password-field" id="password-field" hidden>
+                    <label>
+                      Password
+                      <input id="entry-password" name="entry-password" type="password" autocomplete="current-password" />
+                    </label>
+                    <div class="field-actions">
+                      <button class="inline-button" id="toggle-password-visibility" type="button">Show</button>
+                      <button class="inline-button" id="copy-password-button" type="button">Copy</button>
+                      <button class="inline-button" id="generate-password-button" type="button">Generate</button>
+                    </div>
+                  </div>
+
+                  <label class="wide-field">
+                    <span id="content-label">Body</span>
+                    <textarea id="entry-content" name="entry-content" rows="12" placeholder="Write your encrypted content here..."></textarea>
+                  </label>
+                </div>
+
+                <div class="editor-actions">
+                  <button class="primary-button" type="submit">Save locally</button>
+                  <button class="ghost-button" id="duplicate-entry-button" type="button">Duplicate</button>
+                  <button class="danger-button" id="delete-entry-button" type="button">Delete</button>
+                </div>
+              </form>
+
+              <div class="editor-empty" id="editor-empty">
+                <p>Pick an item from the left or create a new one to start editing.</p>
+              </div>
+            </section>
+
+            <aside class="surface sync-surface">
+              <div class="sync-heading">
+                <div>
+                  <p class="section-kicker">GitHub sync</p>
+                  <h3>Encrypted backup</h3>
+                </div>
+                <span class="mini-note" id="sync-status">Not configured</span>
+              </div>
+
+              <form id="sync-settings-form" class="sync-form">
+                <label>
+                  GitHub owner
+                  <input id="sync-owner" name="sync-owner" type="text" placeholder="your-user-or-org" />
+                </label>
+                <label>
+                  Repository
+                  <input id="sync-repo" name="sync-repo" type="text" placeholder="cloud-notes-vault" />
+                </label>
+                <label>
+                  Branch
+                  <input id="sync-branch" name="sync-branch" type="text" placeholder="main" />
+                </label>
+                <label>
+                  Vault path
+                  <input id="sync-path" name="sync-path" type="text" placeholder="vault/cloud-notes.enc.json" />
+                </label>
+                <label>
+                  Fine-grained PAT
+                  <input id="sync-token" name="sync-token" type="password" autocomplete="off" placeholder="Paste token for this session" />
+                </label>
+
+                <div class="sync-actions">
+                  <button class="secondary-button" type="submit">Save sync settings</button>
+                  <button class="primary-button" id="push-button" type="button">Push encrypted vault</button>
+                  <button class="ghost-button" id="pull-button" type="button">Pull and merge</button>
+                </div>
+              </form>
+
+              <div class="sync-notes">
+                <p class="mini-note">
+                  Use a token with access only to the repository you pick for encrypted sync. The app never persists the token to disk.
+                </p>
+                <p class="mini-note" id="last-sync-note">Last sync: not yet run</p>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
