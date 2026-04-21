@@ -1,4 +1,4 @@
-const API_BASE = "https://cloud-notes-api.YOUR-SUBDOMAIN.workers.dev";
+const API_BASE = "https://cloud-notes-api.cloud-notes-api.workers.dev";
 const PBKDF2_ITERATIONS = 250000;
 
 const state = {
