@@ -1,7 +1,7 @@
 {
-  "name": "Cloud Notes",
-  "short_name": "CloudNotes",
-  "description": "A secure notes PWA with login and private GitHub repository sync.",
+  "name": "Cloud Vault",
+  "short_name": "CloudVault",
+  "description": "A Cloudflare-backed encrypted password manager PWA.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

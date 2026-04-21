@@ -1,7 +1,2 @@
 FRONTEND_ORIGIN="https://chocolategoutham-cyber.github.io"
-GITHUB_OWNER="chocolategoutham-cyber"
-GITHUB_REPO="cloud_notes_vault"
-GITHUB_BRANCH="main"
-GITHUB_TOKEN="replace_with_fine_grained_token_or_github_app_token"
 SESSION_SECRET="replace_with_a_long_random_string"
-APP_ENCRYPTION_SECRET="replace_with_a_different_long_random_string"

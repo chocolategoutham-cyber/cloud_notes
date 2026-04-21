@@ -3,44 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Cloud Notes is a secure notes PWA backed by a private GitHub repository." />
+    <meta name="description" content="Cloud Notes is now a Cloudflare-backed encrypted password manager PWA." />
     <meta name="theme-color" content="#132238" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Cloud Notes" />
+    <meta name="apple-mobile-web-app-title" content="Cloud Vault" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>Cloud Notes</title>
+    <title>Cloud Vault</title>
   </head>
   <body>
     <div class="page-shell">
       <header class="hero surface">
         <div class="hero-copy">
-          <p class="eyebrow">GitHub-backed secure notes</p>
-          <h1>Create an account, sign in, and manage your notes from one private GitHub repo.</h1>
+          <p class="eyebrow">Cloudflare-only password manager</p>
+          <h1>Create an account, unlock your vault, and manage website passwords securely.</h1>
           <p class="lead">
-            The frontend runs as a PWA, while a tiny backend handles secure login, sessions, and note sync to your
-            private repository.
+            Your account uses backend auth, but your password vault is encrypted in the browser with your master
+            password before it is stored in Cloudflare.
           </p>
           <div class="hero-status">
-            <span class="pill">Account login</span>
-            <span class="pill">Private repo sync</span>
-            <span class="pill">PWA installable</span>
+            <span class="pill">Signup / Login</span>
+            <span class="pill">Master-password vault</span>
+            <span class="pill">Cloudflare D1 storage</span>
           </div>
         </div>
         <div class="hero-actions">
           <button class="ghost-button" id="install-button" hidden>Install App</button>
           <button class="ghost-button" id="logout-button" hidden>Logout</button>
-          <p class="mini-note">Install from your mobile browser after the app loads.</p>
+          <button class="ghost-button" id="lock-button" hidden>Lock Vault</button>
+          <p class="mini-note">Install from your mobile browser when ready.</p>
         </div>
       </header>
 
       <main class="main-grid">
-        <section class="surface auth-surface" id="auth-surface">
+        <section class="surface auth-surface" id="account-surface">
           <div class="section-heading">
-            <p class="section-kicker">Account access</p>
+            <p class="section-kicker">Account</p>
             <h2>Login or create your account</h2>
           </div>
 
@@ -51,11 +52,10 @@
                 <input id="login-username" type="text" autocomplete="username" required />
               </label>
               <label>
-                Password
+                Login password
                 <input id="login-password" type="password" autocomplete="current-password" required />
               </label>
               <button class="primary-button" type="submit">Login</button>
-              <p class="mini-note">After login, all notes are loaded from your private GitHub notes repository.</p>
             </form>
 
             <form id="signup-form" class="auth-form">
@@ -64,27 +64,43 @@
                 <input id="signup-username" type="text" autocomplete="username" minlength="3" required />
               </label>
               <label>
-                New password
+                Login password
                 <input id="signup-password" type="password" autocomplete="new-password" minlength="10" required />
               </label>
               <button class="secondary-button" type="submit">Create account</button>
-              <p class="mini-note">Your app account is stored in the backend. Your notes live in the private repo.</p>
+              <p class="mini-note">This password protects your account session. Your vault uses a separate master password.</p>
             </form>
           </div>
+        </section>
 
-          <div class="security-grid">
-            <article class="security-card">
-              <h3>Private GitHub repo as storage</h3>
-              <p>Your notes are written to a fixed private GitHub repository through the backend.</p>
-            </article>
-            <article class="security-card">
-              <h3>Secure sessions</h3>
-              <p>The browser keeps a secure session cookie after login, so sync is internal from your point of view.</p>
-            </article>
-            <article class="security-card">
-              <h3>Full note editing</h3>
-              <p>Create, edit, delete, and search notes after login. Changes are saved back through the backend.</p>
-            </article>
+        <section class="surface auth-surface" id="vault-surface" hidden>
+          <div class="section-heading">
+            <p class="section-kicker">Vault access</p>
+            <h2 id="vault-auth-title">Create your master password</h2>
+          </div>
+
+          <div class="auth-panels">
+            <form id="vault-create-form" class="auth-form">
+              <label>
+                Master password
+                <input id="master-password" type="password" autocomplete="new-password" minlength="10" required />
+              </label>
+              <label>
+                Confirm master password
+                <input id="master-password-confirm" type="password" autocomplete="new-password" minlength="10" required />
+              </label>
+              <button class="primary-button" type="submit">Create encrypted vault</button>
+              <p class="mini-note">This encrypts your saved websites, usernames, and passwords in the browser.</p>
+            </form>
+
+            <form id="vault-unlock-form" class="auth-form" hidden>
+              <label>
+                Master password
+                <input id="unlock-master-password" type="password" autocomplete="current-password" required />
+              </label>
+              <button class="primary-button" type="submit">Unlock vault</button>
+              <p class="mini-note">Your encrypted vault is downloaded from Cloudflare and decrypted only in this browser session.</p>
+            </form>
           </div>
         </section>
 
@@ -92,8 +108,8 @@
           <div class="surface toolbar-surface">
             <div class="toolbar-topline">
               <div>
-                <p class="section-kicker">Signed in</p>
-                <h2 id="vault-headline">Your notes</h2>
+                <p class="section-kicker">Vault</p>
+                <h2 id="vault-headline">Your passwords</h2>
               </div>
               <div class="toolbar-meta">
                 <div class="stat-chip">
@@ -101,8 +117,8 @@
                   <strong id="current-user">-</strong>
                 </div>
                 <div class="stat-chip">
-                  <span class="stat-label">Notes</span>
-                  <strong id="note-count">0</strong>
+                  <span class="stat-label">Entries</span>
+                  <strong id="entry-count">0</strong>
                 </div>
                 <div class="stat-chip">
                   <span class="stat-label">Sync</span>
@@ -113,14 +129,14 @@
 
             <div class="toolbar-controls">
               <label class="search-field">
-                <span>Search notes</span>
-                <input id="search-input" type="search" placeholder="Search titles and content..." />
+                <span>Search vault</span>
+                <input id="search-input" type="search" placeholder="Search website, username, notes..." />
               </label>
             </div>
 
             <div class="quick-actions">
-              <button class="secondary-button" id="new-note-button" type="button">New note</button>
-              <button class="ghost-button" id="refresh-button" type="button">Refresh from repo</button>
+              <button class="secondary-button" id="new-entry-button" type="button">New password</button>
+              <button class="ghost-button" id="sync-button" type="button">Save vault</button>
             </div>
           </div>
 
@@ -128,71 +144,85 @@
             <aside class="surface list-surface">
               <div class="list-heading">
                 <div>
-                  <p class="section-kicker">All notes</p>
-                  <h3>Repo-backed list</h3>
+                  <p class="section-kicker">Saved sites</p>
+                  <h3>Vault entries</h3>
                 </div>
                 <span class="mini-note" id="visible-count">0 visible</span>
               </div>
-              <div class="entry-list" id="note-list"></div>
+              <div class="entry-list" id="entry-list"></div>
             </aside>
 
             <section class="surface editor-surface">
               <div class="editor-heading">
                 <div>
-                  <p class="section-kicker">Editor</p>
-                  <h3 id="editor-title">Select or create a note</h3>
+                  <p class="section-kicker">Entry</p>
+                  <h3 id="editor-title">Select or create an entry</h3>
                 </div>
                 <span class="mini-note" id="editor-updated">No selection</span>
               </div>
 
-              <form id="note-form" class="editor-form" hidden>
+              <form id="entry-form" class="editor-form" hidden>
                 <div class="editor-grid">
                   <label>
-                    Title
-                    <input id="note-title" type="text" maxlength="120" required />
+                    Website
+                    <input id="entry-website" type="text" placeholder="example.com" required />
                   </label>
 
+                  <label>
+                    Username / Email
+                    <input id="entry-username" type="text" autocomplete="username" />
+                  </label>
+
+                  <div class="password-field wide-field">
+                    <label>
+                      Password
+                      <input id="entry-password" type="password" autocomplete="new-password" />
+                    </label>
+                    <div class="field-actions">
+                      <button class="inline-button" id="toggle-password-button" type="button">Show</button>
+                      <button class="inline-button" id="copy-password-button" type="button">Copy</button>
+                      <button class="inline-button" id="generate-password-button" type="button">Generate</button>
+                    </div>
+                  </div>
+
                   <label class="wide-field">
-                    Note
-                    <textarea id="note-content" rows="16" placeholder="Write your note here..."></textarea>
+                    Notes
+                    <textarea id="entry-notes" rows="10" placeholder="Extra notes, recovery hints, security questions..."></textarea>
                   </label>
                 </div>
 
                 <div class="editor-actions">
-                  <button class="primary-button" type="submit">Save to private repo</button>
-                  <button class="danger-button" id="delete-note-button" type="button">Delete note</button>
+                  <button class="primary-button" type="submit">Save entry</button>
+                  <button class="danger-button" id="delete-entry-button" type="button">Delete entry</button>
                 </div>
               </form>
 
               <div class="editor-empty" id="editor-empty">
-                <p>Select a note on the left, or create a new one.</p>
+                <p>Unlock your vault and choose an entry to edit it.</p>
               </div>
             </section>
 
             <aside class="surface sync-surface">
               <div class="sync-heading">
                 <div>
-                  <p class="section-kicker">Backend status</p>
-                  <h3>Connection details</h3>
+                  <p class="section-kicker">Status</p>
+                  <h3>Cloudflare backend</h3>
                 </div>
                 <span class="mini-note" id="api-status">Checking</span>
               </div>
 
               <div class="sync-form">
                 <div class="security-card">
-                  <h3>Backend API</h3>
+                  <h3>API endpoint</h3>
                   <p id="api-base-value"></p>
                 </div>
 
                 <div class="security-card">
-                  <h3>Notes repository</h3>
-                  <p id="repo-name"></p>
+                  <h3>Vault storage</h3>
+                  <p>Encrypted vault blob stored in Cloudflare D1. Plaintext passwords stay in your browser session only.</p>
                 </div>
 
-                <p class="mini-note">
-                  Notes sync happens through the backend using a secure server-side GitHub credential. The frontend
-                  never needs your repo token directly.
-                </p>
+                <p class="mini-note">Your login session is backend-managed. Your master password is never stored by the backend.</p>
               </div>
             </aside>
           </div>

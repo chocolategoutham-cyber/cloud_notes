@@ -1,44 +1,59 @@
 const API_BASE = "https://cloud-notes-api.YOUR-SUBDOMAIN.workers.dev";
+const PBKDF2_ITERATIONS = 250000;
 
 const state = {
   installPrompt: null,
   toastTimeout: null,
   session: null,
-  notes: [],
+  vault: null,
+  encryptedVault: null,
   selectedId: null,
   search: "",
   loading: false,
+  masterPassword: "",
 };
 
 const refs = {
-  authSurface: document.querySelector("#auth-surface"),
+  accountSurface: document.querySelector("#account-surface"),
+  vaultSurface: document.querySelector("#vault-surface"),
   appShell: document.querySelector("#app-shell"),
   installButton: document.querySelector("#install-button"),
   logoutButton: document.querySelector("#logout-button"),
+  lockButton: document.querySelector("#lock-button"),
   loginForm: document.querySelector("#login-form"),
   signupForm: document.querySelector("#signup-form"),
   loginUsername: document.querySelector("#login-username"),
   loginPassword: document.querySelector("#login-password"),
   signupUsername: document.querySelector("#signup-username"),
   signupPassword: document.querySelector("#signup-password"),
+  vaultAuthTitle: document.querySelector("#vault-auth-title"),
+  vaultCreateForm: document.querySelector("#vault-create-form"),
+  vaultUnlockForm: document.querySelector("#vault-unlock-form"),
+  masterPassword: document.querySelector("#master-password"),
+  masterPasswordConfirm: document.querySelector("#master-password-confirm"),
+  unlockMasterPassword: document.querySelector("#unlock-master-password"),
   currentUser: document.querySelector("#current-user"),
-  noteCount: document.querySelector("#note-count"),
+  entryCount: document.querySelector("#entry-count"),
   syncStatus: document.querySelector("#sync-status"),
   searchInput: document.querySelector("#search-input"),
-  newNoteButton: document.querySelector("#new-note-button"),
-  refreshButton: document.querySelector("#refresh-button"),
-  noteList: document.querySelector("#note-list"),
+  newEntryButton: document.querySelector("#new-entry-button"),
+  syncButton: document.querySelector("#sync-button"),
+  entryList: document.querySelector("#entry-list"),
   visibleCount: document.querySelector("#visible-count"),
   editorTitle: document.querySelector("#editor-title"),
   editorUpdated: document.querySelector("#editor-updated"),
-  noteForm: document.querySelector("#note-form"),
+  entryForm: document.querySelector("#entry-form"),
   editorEmpty: document.querySelector("#editor-empty"),
-  noteTitle: document.querySelector("#note-title"),
-  noteContent: document.querySelector("#note-content"),
-  deleteNoteButton: document.querySelector("#delete-note-button"),
+  entryWebsite: document.querySelector("#entry-website"),
+  entryUsername: document.querySelector("#entry-username"),
+  entryPassword: document.querySelector("#entry-password"),
+  entryNotes: document.querySelector("#entry-notes"),
+  togglePasswordButton: document.querySelector("#toggle-password-button"),
+  copyPasswordButton: document.querySelector("#copy-password-button"),
+  generatePasswordButton: document.querySelector("#generate-password-button"),
+  deleteEntryButton: document.querySelector("#delete-entry-button"),
   apiStatus: document.querySelector("#api-status"),
   apiBaseValue: document.querySelector("#api-base-value"),
-  repoName: document.querySelector("#repo-name"),
   vaultHeadline: document.querySelector("#vault-headline"),
   toast: document.querySelector("#toast"),
 };
@@ -66,31 +81,55 @@ function bindEvents() {
     void signup();
   });
 
+  refs.vaultCreateForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void createVault();
+  });
+
+  refs.vaultUnlockForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void unlockVault();
+  });
+
   refs.logoutButton.addEventListener("click", () => void logout());
+  refs.lockButton.addEventListener("click", () => lockVault("Vault locked."));
   refs.searchInput.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
-    renderNoteList();
+    renderEntryList();
   });
-  refs.newNoteButton.addEventListener("click", () => {
-    state.selectedId = null;
-    refs.noteForm.hidden = false;
-    refs.editorEmpty.hidden = true;
-    refs.editorTitle.textContent = "New note";
-    refs.editorUpdated.textContent = "Unsaved";
-    refs.noteForm.reset();
-    refs.noteTitle.focus();
-  });
-  refs.refreshButton.addEventListener("click", () => void loadNotes(true));
-  refs.noteForm.addEventListener("submit", (event) => {
+  refs.newEntryButton.addEventListener("click", () => startNewEntry());
+  refs.syncButton.addEventListener("click", () => void persistVaultToBackend("Vault saved to Cloudflare."));
+  refs.entryForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    void saveNote();
+    void saveEntry();
   });
-  refs.deleteNoteButton.addEventListener("click", () => void deleteNote());
+  refs.deleteEntryButton.addEventListener("click", () => void deleteEntry());
+
+  refs.togglePasswordButton.addEventListener("click", () => {
+    refs.entryPassword.type = refs.entryPassword.type === "password" ? "text" : "password";
+    refs.togglePasswordButton.textContent = refs.entryPassword.type === "password" ? "Show" : "Hide";
+  });
+
+  refs.copyPasswordButton.addEventListener("click", async () => {
+    if (!refs.entryPassword.value) {
+      showToast("No password to copy.");
+      return;
+    }
+    await navigator.clipboard.writeText(refs.entryPassword.value);
+    showToast("Password copied.");
+  });
+
+  refs.generatePasswordButton.addEventListener("click", () => {
+    refs.entryPassword.value = generatePassword();
+    refs.entryPassword.type = "text";
+    refs.togglePasswordButton.textContent = "Hide";
+    showToast("Strong password generated.");
+  });
+
   refs.installButton.addEventListener("click", async () => {
     if (!state.installPrompt) {
       return;
     }
-
     state.installPrompt.prompt();
     await state.installPrompt.userChoice;
     state.installPrompt = null;
@@ -102,15 +141,14 @@ async function hydrateSession() {
   try {
     const session = await api("/session");
     state.session = session.user;
+    state.encryptedVault = session.vault;
     refs.apiStatus.textContent = "Connected";
-    refs.repoName.textContent = session.repo;
-    await loadNotes(false);
   } catch {
     state.session = null;
+    state.encryptedVault = null;
     refs.apiStatus.textContent = "Backend ready";
-    refs.repoName.textContent = "Configured by worker environment";
-    render();
   }
+  render();
 }
 
 async function signup() {
@@ -118,12 +156,11 @@ async function signup() {
   const password = refs.signupPassword.value;
 
   if (username.length < 3) {
-    showToast("Use a username with at least 3 characters.");
+    showToast("Username must be at least 3 characters.");
     return;
   }
-
   if (password.length < 10) {
-    showToast("Use a password with at least 10 characters.");
+    showToast("Login password must be at least 10 characters.");
     return;
   }
 
@@ -132,12 +169,12 @@ async function signup() {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
-
     state.session = response.user;
+    state.encryptedVault = null;
     refs.signupForm.reset();
     refs.loginForm.reset();
-    showToast("Account created. You are now logged in.");
-    await loadNotes(false);
+    render();
+    showToast("Account created.");
   });
 }
 
@@ -150,11 +187,11 @@ async function login() {
         password: refs.loginPassword.value,
       }),
     });
-
     state.session = response.user;
+    state.encryptedVault = response.vault;
     refs.loginForm.reset();
+    render();
     showToast("Logged in.");
-    await loadNotes(false);
   });
 }
 
@@ -162,122 +199,192 @@ async function logout() {
   await withLoading(async () => {
     await api("/logout", { method: "POST" });
     state.session = null;
-    state.notes = [];
+    state.vault = null;
+    state.encryptedVault = null;
+    state.masterPassword = "";
     state.selectedId = null;
-    refs.searchInput.value = "";
     state.search = "";
+    refs.searchInput.value = "";
     render();
     showToast("Logged out.");
   });
 }
 
-async function loadNotes(showToastOnSuccess) {
-  await withLoading(async () => {
-    const response = await api("/notes");
-    state.notes = Array.isArray(response.notes) ? response.notes : [];
-    state.selectedId = state.notes[0]?.id ?? null;
+async function createVault() {
+  const password = refs.masterPassword.value;
+  const confirm = refs.masterPasswordConfirm.value;
+  if (password.length < 10) {
+    showToast("Master password must be at least 10 characters.");
+    return;
+  }
+  if (password !== confirm) {
+    showToast("Master passwords do not match.");
+    return;
+  }
+
+  state.masterPassword = password;
+  state.vault = createEmptyVault();
+  state.selectedId = null;
+  refs.vaultCreateForm.reset();
+  await persistVaultToBackend("Encrypted vault created.");
+  render();
+}
+
+async function unlockVault() {
+  if (!state.encryptedVault) {
+    showToast("No encrypted vault found.");
+    return;
+  }
+
+  try {
+    state.masterPassword = refs.unlockMasterPassword.value;
+    state.vault = await decryptVault(state.encryptedVault, state.masterPassword);
+    state.selectedId = state.vault.entries[0]?.id ?? null;
+    refs.vaultUnlockForm.reset();
     render();
-    if (showToastOnSuccess) {
-      showToast("Notes refreshed from the private repo.");
+    showToast("Vault unlocked.");
+  } catch {
+    showToast("Master password is incorrect.");
+  }
+}
+
+function lockVault(message) {
+  state.vault = null;
+  state.masterPassword = "";
+  state.selectedId = null;
+  render();
+  if (message) {
+    showToast(message);
+  }
+}
+
+function startNewEntry() {
+  state.selectedId = null;
+  refs.entryForm.hidden = false;
+  refs.editorEmpty.hidden = true;
+  refs.editorTitle.textContent = "New password entry";
+  refs.editorUpdated.textContent = "Unsaved";
+  refs.entryForm.reset();
+  refs.entryPassword.type = "password";
+  refs.togglePasswordButton.textContent = "Show";
+}
+
+async function saveEntry() {
+  const entry = {
+    id: state.selectedId || crypto.randomUUID(),
+    website: refs.entryWebsite.value.trim(),
+    username: refs.entryUsername.value.trim(),
+    password: refs.entryPassword.value,
+    notes: refs.entryNotes.value,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (!entry.website) {
+    showToast("Website is required.");
+    return;
+  }
+
+  const existingIndex = state.vault.entries.findIndex((item) => item.id === entry.id);
+  if (existingIndex === -1) {
+    entry.createdAt = entry.updatedAt;
+    state.vault.entries.unshift(entry);
+  } else {
+    entry.createdAt = state.vault.entries[existingIndex].createdAt;
+    state.vault.entries[existingIndex] = entry;
+  }
+
+  state.vault.entries.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+  state.selectedId = entry.id;
+  await persistVaultToBackend("Vault saved.");
+  render();
+}
+
+async function deleteEntry() {
+  const entry = getSelectedEntry();
+  if (!entry) {
+    return;
+  }
+  const confirmed = window.confirm(`Delete the entry for "${entry.website}"?`);
+  if (!confirmed) {
+    return;
+  }
+  state.vault.entries = state.vault.entries.filter((item) => item.id !== entry.id);
+  state.selectedId = state.vault.entries[0]?.id ?? null;
+  await persistVaultToBackend("Entry deleted.");
+  render();
+}
+
+async function persistVaultToBackend(successMessage) {
+  if (!state.session || !state.vault || !state.masterPassword) {
+    return;
+  }
+
+  await withLoading(async () => {
+    state.encryptedVault = await encryptVault(state.vault, state.masterPassword);
+    await api("/vault", {
+      method: "PUT",
+      body: JSON.stringify({ encryptedVault: state.encryptedVault }),
+    });
+    if (successMessage) {
+      showToast(successMessage);
     }
   });
 }
 
-async function saveNote() {
-  const title = refs.noteTitle.value.trim() || "Untitled note";
-  const content = refs.noteContent.value;
-  const noteId = state.selectedId;
-
-  await withLoading(async () => {
-    const endpoint = noteId ? `/notes/${encodeURIComponent(noteId)}` : "/notes";
-    const method = noteId ? "PUT" : "POST";
-    const response = await api(endpoint, {
-      method,
-      body: JSON.stringify({ title, content }),
-    });
-
-    upsertNote(response.note);
-    state.selectedId = response.note.id;
-    render();
-    showToast(noteId ? "Note updated in the private repo." : "New note added to the private repo.");
-  });
-}
-
-async function deleteNote() {
-  const selected = getSelectedNote();
-  if (!selected) {
-    return;
-  }
-
-  const confirmed = window.confirm(`Delete "${selected.title}"?`);
-  if (!confirmed) {
-    return;
-  }
-
-  await withLoading(async () => {
-    await api(`/notes/${encodeURIComponent(selected.id)}`, {
-      method: "DELETE",
-    });
-
-    state.notes = state.notes.filter((note) => note.id !== selected.id);
-    state.selectedId = state.notes[0]?.id ?? null;
-    render();
-    showToast("Note deleted from the private repo.");
-  });
-}
-
-function upsertNote(note) {
-  const index = state.notes.findIndex((entry) => entry.id === note.id);
-  if (index === -1) {
-    state.notes.unshift(note);
-  } else {
-    state.notes[index] = note;
-  }
-
-  state.notes.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
-}
-
 function render() {
   const loggedIn = Boolean(state.session);
-  refs.authSurface.hidden = loggedIn;
-  refs.appShell.hidden = !loggedIn;
+  const unlocked = Boolean(state.vault);
+
+  refs.accountSurface.hidden = loggedIn;
+  refs.vaultSurface.hidden = !loggedIn || unlocked;
+  refs.appShell.hidden = !loggedIn || !unlocked;
   refs.logoutButton.hidden = !loggedIn;
+  refs.lockButton.hidden = !unlocked;
 
   if (!loggedIn) {
     refs.syncStatus.textContent = state.loading ? "Working" : "Idle";
     return;
   }
 
-  refs.currentUser.textContent = state.session.username;
-  refs.noteCount.textContent = String(state.notes.length);
-  refs.syncStatus.textContent = state.loading ? "Syncing" : "Ready";
-  refs.vaultHeadline.textContent = `${state.session.username}'s notes`;
+  const hasVault = Boolean(state.encryptedVault);
+  refs.vaultAuthTitle.textContent = hasVault ? "Unlock your master-password vault" : "Create your master password";
+  refs.vaultCreateForm.hidden = hasVault;
+  refs.vaultUnlockForm.hidden = !hasVault;
 
-  renderNoteList();
-  renderEditor();
-}
-
-function renderNoteList() {
-  refs.noteList.innerHTML = "";
-  const notes = visibleNotes();
-  refs.visibleCount.textContent = `${notes.length} visible`;
-
-  if (!notes.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-list";
-    empty.textContent = state.search ? "No notes match your search." : "No notes yet. Create your first note.";
-    refs.noteList.append(empty);
+  if (!unlocked) {
+    refs.syncStatus.textContent = state.loading ? "Working" : "Locked";
     return;
   }
 
-  for (const note of notes) {
+  refs.currentUser.textContent = state.session.username;
+  refs.entryCount.textContent = String(state.vault.entries.length);
+  refs.syncStatus.textContent = state.loading ? "Saving" : "Ready";
+  refs.vaultHeadline.textContent = `${state.session.username}'s password vault`;
+  renderEntryList();
+  renderEditor();
+}
+
+function renderEntryList() {
+  refs.entryList.innerHTML = "";
+  const entries = visibleEntries();
+  refs.visibleCount.textContent = `${entries.length} visible`;
+
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-list";
+    empty.textContent = state.search ? "No matching passwords found." : "No saved passwords yet.";
+    refs.entryList.append(empty);
+    return;
+  }
+
+  for (const entry of entries) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "entry-card";
-    button.classList.toggle("is-selected", note.id === state.selectedId);
+    button.classList.toggle("is-selected", entry.id === state.selectedId);
     button.addEventListener("click", () => {
-      state.selectedId = note.id;
-      renderNoteList();
+      state.selectedId = entry.id;
+      renderEntryList();
       renderEditor();
     });
 
@@ -285,55 +392,132 @@ function renderNoteList() {
     meta.className = "entry-meta";
 
     const title = document.createElement("h4");
-    title.textContent = note.title;
+    title.textContent = entry.website;
 
     const updated = document.createElement("span");
     updated.className = "mini-note";
-    updated.textContent = formatDate(note.updatedAt);
+    updated.textContent = formatDate(entry.updatedAt);
 
     const summary = document.createElement("p");
     summary.className = "entry-summary";
-    summary.textContent = note.content || "No content yet";
+    summary.textContent = entry.username || entry.notes || "Saved password entry";
 
     meta.append(title, updated);
     button.append(meta, summary);
-    refs.noteList.append(button);
+    refs.entryList.append(button);
   }
 }
 
 function renderEditor() {
-  const selected = getSelectedNote();
-  refs.noteForm.hidden = !selected;
-  refs.editorEmpty.hidden = Boolean(selected);
+  const entry = getSelectedEntry();
+  refs.entryForm.hidden = !entry;
+  refs.editorEmpty.hidden = Boolean(entry);
 
-  if (!selected) {
-    refs.editorTitle.textContent = "Select or create a note";
+  if (!entry) {
+    refs.editorTitle.textContent = "Select or create an entry";
     refs.editorUpdated.textContent = "No selection";
     return;
   }
 
-  refs.editorTitle.textContent = selected.title;
-  refs.editorUpdated.textContent = `Updated ${formatDate(selected.updatedAt)}`;
-  refs.noteTitle.value = selected.title;
-  refs.noteContent.value = selected.content;
+  refs.editorTitle.textContent = entry.website;
+  refs.editorUpdated.textContent = `Updated ${formatDate(entry.updatedAt)}`;
+  refs.entryWebsite.value = entry.website;
+  refs.entryUsername.value = entry.username;
+  refs.entryPassword.value = entry.password;
+  refs.entryNotes.value = entry.notes;
+  refs.entryPassword.type = "password";
+  refs.togglePasswordButton.textContent = "Show";
 }
 
-function visibleNotes() {
+function visibleEntries() {
+  const entries = state.vault?.entries || [];
   if (!state.search) {
-    return state.notes;
+    return entries;
   }
 
-  return state.notes.filter((note) => {
-    const haystack = `${note.title} ${note.content}`.toLowerCase();
+  return entries.filter((entry) => {
+    const haystack = `${entry.website} ${entry.username} ${entry.notes}`.toLowerCase();
     return haystack.includes(state.search);
   });
 }
 
-function getSelectedNote() {
-  if (!state.selectedId) {
+function getSelectedEntry() {
+  if (!state.vault || !state.selectedId) {
     return null;
   }
-  return state.notes.find((note) => note.id === state.selectedId) || null;
+  return state.vault.entries.find((entry) => entry.id === state.selectedId) || null;
+}
+
+function createEmptyVault() {
+  return {
+    version: 1,
+    entries: [],
+  };
+}
+
+async function encryptVault(vault, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt);
+  const encoded = new TextEncoder().encode(JSON.stringify(vault));
+  const cipherBuffer = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+  return {
+    version: 1,
+    salt: encodeBase64Bytes(salt),
+    iv: encodeBase64Bytes(iv),
+    cipherText: encodeBase64Bytes(new Uint8Array(cipherBuffer)),
+  };
+}
+
+async function decryptVault(payload, password) {
+  const salt = decodeBase64Bytes(payload.salt);
+  const iv = decodeBase64Bytes(payload.iv);
+  const cipherText = decodeBase64Bytes(payload.cipherText);
+  const key = await deriveKey(password, salt);
+  const plainBuffer = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipherText);
+  return JSON.parse(new TextDecoder().decode(plainBuffer));
+}
+
+async function deriveKey(password, salt) {
+  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, [
+    "deriveKey",
+  ]);
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: PBKDF2_ITERATIONS,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+function generatePassword(length = 20) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+";
+  const random = new Uint32Array(length);
+  crypto.getRandomValues(random);
+  let output = "";
+  for (let index = 0; index < length; index += 1) {
+    output += alphabet[random[index] % alphabet.length];
+  }
+  return output;
+}
+
+function encodeBase64Bytes(bytes) {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+function decodeBase64Bytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
 async function withLoading(task) {
@@ -391,7 +575,7 @@ function registerInstallPrompt() {
 
   window.addEventListener("appinstalled", () => {
     refs.installButton.hidden = true;
-    showToast("Cloud Notes was installed.");
+    showToast("Cloud Vault was installed.");
   });
 }
 
