@@ -1,7 +1,7 @@
 {
   "name": "Cloud Notes",
   "short_name": "CloudNotes",
-  "description": "A GitHub-first encrypted PWA for secure notes.",
+  "description": "A secure notes PWA with login and private GitHub repository sync.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

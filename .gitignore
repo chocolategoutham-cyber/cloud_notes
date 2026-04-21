@@ -1,3 +1,5 @@
 .DS_Store
 Thumbs.db
 desktop.ini
+worker/node_modules/
+worker/.dev.vars
