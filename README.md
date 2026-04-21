@@ -1,58 +1,39 @@
 # Cloud Notes
 
-Cloud Notes is a GitHub-first progressive web app for private notes, passwords, and sensitive text.
+Cloud Notes is a GitHub-first progressive web app for encrypted notes only.
 
-The app is intentionally static so it can be hosted on GitHub Pages without any non-GitHub services. The security model is:
+## Security model
 
-- the app UI is a public static site
-- the vault is encrypted in the browser before it is saved anywhere
-- local storage keeps only an encrypted vault payload
-- GitHub sync stores only the encrypted vault JSON in a private repository
+- the app UI is a static GitHub Pages site
+- notes are encrypted in the browser before local save
+- the same encrypted payload is pushed to a separate private GitHub repository
+- notes become searchable only after the vault is unlocked with the master password
+
+## This build
+
+This build is wired to a fixed private vault repository target:
+
+- owner: `chocolategoutham-cyber`
+- repo: `cloud_notes_vault`
+- branch: `main`
+- path: `vault/notes.enc.json`
+
+The repo target is internal to the code. Authentication is still user-side for security reasons, because a GitHub Pages app cannot safely hide a write-capable GitHub credential inside browser code.
 
 ## Features
 
-- installable PWA with offline support
-- encrypted local-first vault using Web Crypto API
-- three item types: notes, passwords, and private snippets
-- GitHub sync through the GitHub Contents API
+- installable PWA
+- offline support through a service worker
+- encrypted local vault using Web Crypto API
+- secure note search after unlock
+- note create, edit, duplicate, delete
+- encrypted GitHub sync to a dedicated private repo
 - auto-lock timer
-- password generator
-- touch-friendly responsive layout
 
-## Local Development
-
-Because this is a static app, you can open it with a simple local web server.
-
-Examples:
+## Local development
 
 ```powershell
 python -m http.server 4173
 ```
 
-Then open `http://localhost:4173`.
-
-## GitHub Setup
-
-1. Create a GitHub repository for this project.
-2. Push this code to the repository.
-3. Enable GitHub Pages with the included Actions workflow.
-4. In the app, configure a private repository for encrypted vault sync.
-5. Create a fine-grained personal access token with access only to that sync repository's contents.
-
-Recommended pattern:
-
-- `cloud-notes-app`: public or private source repo that deploys GitHub Pages
-- `cloud-notes-vault`: private repo that stores only `vault/cloud-notes.enc.json`
-
-You can also use one repo, but separating app hosting from encrypted data is cleaner.
-
-## Sync Notes
-
-- The app never sends plaintext vault data to GitHub.
-- Use the same passphrase across devices so the same encrypted vault can be unlocked everywhere.
-- Deletions are tracked with tombstones so pull/merge is safer across devices.
-- The GitHub token is intentionally not persisted to disk by the app.
-
-## Deployment
-
-The workflow in `.github/workflows/deploy-pages.yml` deploys the static app directly to GitHub Pages.
+Open `http://localhost:4173`.

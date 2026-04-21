@@ -1,16 +1,15 @@
 const DB_NAME = "cloud-notes-db";
 const STORE_NAME = "vault";
 const ENCRYPTED_VAULT_KEY = "encrypted-vault";
-const SYNC_SETTINGS_KEY = "cloud-notes-sync-settings";
 const AUTO_LOCK_KEY = "cloud-notes-auto-lock";
 const LAST_SYNC_KEY = "cloud-notes-last-sync";
 const GITHUB_TOKEN_SESSION_KEY = "cloud-notes-session-token";
 const PBKDF2_ITERATIONS = 250000;
-const EMPTY_SYNC_SETTINGS = {
-  owner: "",
-  repo: "",
+const GITHUB_VAULT = {
+  owner: "chocolategoutham-cyber",
+  repo: "cloud_notes_vault",
   branch: "main",
-  path: "vault/cloud-notes.enc.json",
+  path: "vault/notes.enc.json",
 };
 
 const state = {
@@ -18,10 +17,8 @@ const state = {
   vault: null,
   passphrase: "",
   selectedId: null,
-  filter: "all",
   search: "",
   autoLockMinutes: readJsonStorage(AUTO_LOCK_KEY, 10),
-  syncSettings: { ...EMPTY_SYNC_SETTINGS, ...readJsonStorage(SYNC_SETTINGS_KEY, EMPTY_SYNC_SETTINGS) },
   lastSync: readJsonStorage(LAST_SYNC_KEY, null),
   installPrompt: null,
   toastTimeout: null,
@@ -39,46 +36,28 @@ const refs = {
   appShell: document.querySelector("#app-shell"),
   lockButton: document.querySelector("#lock-button"),
   installButton: document.querySelector("#install-button"),
-  itemCount: document.querySelector("#item-count"),
-  passwordCount: document.querySelector("#password-count"),
+  noteCount: document.querySelector("#note-count"),
   saveStatus: document.querySelector("#save-status"),
   searchInput: document.querySelector("#search-input"),
-  filterGroup: document.querySelector("#filter-group"),
   autoLockSelect: document.querySelector("#auto-lock-select"),
   newNoteButton: document.querySelector("#new-note-button"),
-  newPasswordButton: document.querySelector("#new-password-button"),
-  newSnippetButton: document.querySelector("#new-snippet-button"),
-  entryList: document.querySelector("#entry-list"),
+  duplicateNoteButton: document.querySelector("#duplicate-note-button"),
+  noteList: document.querySelector("#note-list"),
   visibleCount: document.querySelector("#visible-count"),
   editorTitle: document.querySelector("#editor-title"),
   editorUpdated: document.querySelector("#editor-updated"),
-  entryForm: document.querySelector("#entry-form"),
+  noteForm: document.querySelector("#note-form"),
   editorEmpty: document.querySelector("#editor-empty"),
-  entryType: document.querySelector("#entry-type"),
-  entryTitle: document.querySelector("#entry-title"),
-  entryTags: document.querySelector("#entry-tags"),
-  usernameField: document.querySelector("#username-field"),
-  urlField: document.querySelector("#url-field"),
-  passwordField: document.querySelector("#password-field"),
-  entryUsername: document.querySelector("#entry-username"),
-  entryUrl: document.querySelector("#entry-url"),
-  entryPassword: document.querySelector("#entry-password"),
-  entryContent: document.querySelector("#entry-content"),
-  contentLabel: document.querySelector("#content-label"),
-  duplicateEntryButton: document.querySelector("#duplicate-entry-button"),
-  deleteEntryButton: document.querySelector("#delete-entry-button"),
-  togglePasswordVisibility: document.querySelector("#toggle-password-visibility"),
-  copyPasswordButton: document.querySelector("#copy-password-button"),
-  generatePasswordButton: document.querySelector("#generate-password-button"),
+  noteTitle: document.querySelector("#note-title"),
+  noteTags: document.querySelector("#note-tags"),
+  noteContent: document.querySelector("#note-content"),
+  deleteNoteButton: document.querySelector("#delete-note-button"),
   syncStatus: document.querySelector("#sync-status"),
-  syncSettingsForm: document.querySelector("#sync-settings-form"),
-  syncOwner: document.querySelector("#sync-owner"),
-  syncRepo: document.querySelector("#sync-repo"),
-  syncBranch: document.querySelector("#sync-branch"),
-  syncPath: document.querySelector("#sync-path"),
   syncToken: document.querySelector("#sync-token"),
   pushButton: document.querySelector("#push-button"),
   pullButton: document.querySelector("#pull-button"),
+  repoName: document.querySelector("#repo-name"),
+  repoPath: document.querySelector("#repo-path"),
   lastSyncNote: document.querySelector("#last-sync-note"),
   vaultHeadline: document.querySelector("#vault-headline"),
   toast: document.querySelector("#toast"),
@@ -108,7 +87,7 @@ function bindEvents() {
     void unlockVault();
   });
 
-  refs.lockButton.addEventListener("click", () => lockVault("Vault locked."));
+  refs.lockButton.addEventListener("click", () => lockVault("Notes locked."));
 
   refs.installButton.addEventListener("click", async () => {
     if (!state.installPrompt) {
@@ -123,18 +102,7 @@ function bindEvents() {
 
   refs.searchInput.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
-    renderEntryList();
-  });
-
-  refs.filterGroup.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-filter]");
-    if (!button) {
-      return;
-    }
-
-    state.filter = button.dataset.filter;
-    renderFilters();
-    renderEntryList();
+    renderNoteList();
   });
 
   refs.autoLockSelect.addEventListener("change", (event) => {
@@ -144,46 +112,15 @@ function bindEvents() {
     showToast(state.autoLockMinutes === 0 ? "Auto-lock disabled for this device." : `Auto-lock set to ${state.autoLockMinutes} minutes.`);
   });
 
-  refs.newNoteButton.addEventListener("click", () => void createEntry("note"));
-  refs.newPasswordButton.addEventListener("click", () => void createEntry("password"));
-  refs.newSnippetButton.addEventListener("click", () => void createEntry("snippet"));
+  refs.newNoteButton.addEventListener("click", () => void createNote());
+  refs.duplicateNoteButton.addEventListener("click", () => void duplicateSelectedNote());
 
-  refs.entryForm.addEventListener("submit", (event) => {
+  refs.noteForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    void saveSelectedEntry();
+    void saveSelectedNote();
   });
 
-  refs.entryType.addEventListener("change", () => renderEditorFields());
-  refs.duplicateEntryButton.addEventListener("click", () => void duplicateSelectedEntry());
-  refs.deleteEntryButton.addEventListener("click", () => void deleteSelectedEntry());
-
-  refs.togglePasswordVisibility.addEventListener("click", () => {
-    refs.entryPassword.type = refs.entryPassword.type === "password" ? "text" : "password";
-    refs.togglePasswordVisibility.textContent = refs.entryPassword.type === "password" ? "Show" : "Hide";
-  });
-
-  refs.copyPasswordButton.addEventListener("click", async () => {
-    if (!refs.entryPassword.value) {
-      showToast("There is no password to copy yet.");
-      return;
-    }
-
-    await navigator.clipboard.writeText(refs.entryPassword.value);
-    showToast("Password copied to your clipboard.");
-  });
-
-  refs.generatePasswordButton.addEventListener("click", () => {
-    refs.entryPassword.value = generatePassword();
-    refs.entryPassword.type = "text";
-    refs.togglePasswordVisibility.textContent = "Hide";
-    showToast("Generated a strong password. Save the entry to keep it.");
-  });
-
-  refs.syncSettingsForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    saveSyncSettings();
-  });
-
+  refs.deleteNoteButton.addEventListener("click", () => void deleteSelectedNote());
   refs.pushButton.addEventListener("click", () => void pushVaultToGitHub());
   refs.pullButton.addEventListener("click", () => void pullVaultFromGitHub());
 
@@ -194,6 +131,13 @@ function bindEvents() {
       }
     });
   });
+}
+
+function applyStoredSettings() {
+  refs.autoLockSelect.value = String(state.autoLockMinutes);
+  refs.syncToken.value = sessionStorage.getItem(GITHUB_TOKEN_SESSION_KEY) ?? "";
+  refs.repoName.textContent = `${GITHUB_VAULT.owner}/${GITHUB_VAULT.repo}`;
+  refs.repoPath.textContent = `${GITHUB_VAULT.branch} -> ${GITHUB_VAULT.path}`;
 }
 
 function registerInstallPrompt() {
@@ -215,48 +159,37 @@ function registerServiceWorker() {
   }
 }
 
-function applyStoredSettings() {
-  refs.autoLockSelect.value = String(state.autoLockMinutes);
-  refs.syncOwner.value = state.syncSettings.owner;
-  refs.syncRepo.value = state.syncSettings.repo;
-  refs.syncBranch.value = state.syncSettings.branch;
-  refs.syncPath.value = state.syncSettings.path;
-  refs.syncToken.value = sessionStorage.getItem(GITHUB_TOKEN_SESSION_KEY) ?? "";
-}
-
 async function createVault() {
   const passphrase = refs.setupPassphrase.value.trim();
   const confirmation = refs.setupConfirm.value.trim();
 
   if (passphrase.length < 10) {
-    showToast("Choose a passphrase with at least 10 characters.");
+    showToast("Choose a password with at least 10 characters.");
     return;
   }
 
   if (passphrase !== confirmation) {
-    showToast("The passphrases do not match.");
+    showToast("The passwords do not match.");
     return;
   }
 
   const vault = createStarterVault();
   await unlockWithVault(vault, passphrase, true);
   refs.setupForm.reset();
-  showToast("Encrypted vault created on this device.");
+  showToast("Encrypted notes vault created on this device.");
 }
 
 async function unlockVault() {
   if (!state.encryptedVault) {
-    showToast("No encrypted vault exists on this device yet.");
+    showToast("No encrypted notes vault exists on this device yet.");
     return;
   }
 
-  const passphrase = refs.unlockPassphrase.value;
-
   try {
-    const vault = await decryptVault(state.encryptedVault, passphrase);
-    await unlockWithVault(vault, passphrase, false);
+    const vault = await decryptVault(state.encryptedVault, refs.unlockPassphrase.value);
+    await unlockWithVault(vault, refs.unlockPassphrase.value, false);
     refs.unlockForm.reset();
-    showToast("Vault unlocked.");
+    showToast("Notes unlocked.");
   } catch (error) {
     showToast(error.message);
   }
@@ -267,7 +200,7 @@ async function unlockWithVault(vault, passphrase, shouldPersist) {
   state.vault = normalizeVault(vault);
   state.selectedId = chooseSelection();
   if (shouldPersist) {
-    await persistVault("Vault saved locally.");
+    await persistVault("Encrypted notes saved locally.");
   }
   render();
   scheduleAutoLock();
@@ -278,113 +211,81 @@ function lockVault(message) {
   state.vault = null;
   state.selectedId = null;
   clearTimeout(state.lockTimeout);
-  refs.entryForm.reset();
-  refs.entryPassword.type = "password";
-  refs.togglePasswordVisibility.textContent = "Show";
+  refs.noteForm.reset();
   render();
   if (message) {
     showToast(message);
   }
 }
 
-async function createEntry(type) {
+async function createNote() {
   if (!state.vault) {
     return;
   }
 
-  const item = buildEntry(type);
-  state.vault.items.unshift(item);
-  state.selectedId = item.id;
+  const note = buildNote();
+  state.vault.notes.unshift(note);
+  state.selectedId = note.id;
   touchVault();
-  await persistVault(`${labelForType(type)} created locally.`);
+  await persistVault("New note created.");
   render();
 }
 
-async function saveSelectedEntry() {
-  const selected = getSelectedEntry();
+async function duplicateSelectedNote() {
+  const selected = getSelectedNote();
   if (!selected) {
+    return;
+  }
+
+  const copy = {
+    ...selected,
+    id: crypto.randomUUID(),
+    title: `${selected.title} copy`,
+    tags: [...selected.tags],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  state.vault.notes.unshift(copy);
+  state.selectedId = copy.id;
+  touchVault();
+  await persistVault("Note duplicated.");
+  render();
+}
+
+async function saveSelectedNote() {
+  const note = getSelectedNote();
+  if (!note) {
     return;
   }
 
   const now = new Date().toISOString();
-  const nextType = refs.entryType.value;
-  selected.type = nextType;
-  selected.title = refs.entryTitle.value.trim() || defaultTitleForType(nextType);
-  selected.tags = parseTags(refs.entryTags.value);
-  selected.username = refs.entryUsername.value.trim();
-  selected.url = refs.entryUrl.value.trim();
-  selected.password = refs.entryPassword.value;
-  selected.content = refs.entryContent.value;
-  selected.updatedAt = now;
-
-  if (selected.type !== "password") {
-    selected.username = "";
-    selected.url = "";
-    selected.password = "";
-  }
-
+  note.title = refs.noteTitle.value.trim() || "Untitled note";
+  note.tags = parseTags(refs.noteTags.value);
+  note.content = refs.noteContent.value;
+  note.updatedAt = now;
   touchVault(now);
-  await persistVault("Local vault updated.");
+  await persistVault("Note saved.");
   render();
 }
 
-async function duplicateSelectedEntry() {
-  const selected = getSelectedEntry();
-  if (!selected) {
+async function deleteSelectedNote() {
+  const note = getSelectedNote();
+  if (!note) {
     return;
   }
 
-  const duplicate = {
-    ...selected,
-    id: crypto.randomUUID(),
-    title: `${selected.title} copy`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    tags: [...selected.tags],
-  };
-
-  state.vault.items.unshift(duplicate);
-  state.selectedId = duplicate.id;
-  touchVault();
-  await persistVault("Entry duplicated.");
-  render();
-}
-
-async function deleteSelectedEntry() {
-  const selected = getSelectedEntry();
-  if (!selected) {
-    return;
-  }
-
-  const confirmed = window.confirm(`Delete "${selected.title}" from this encrypted vault?`);
+  const confirmed = window.confirm(`Delete "${note.title}" from this encrypted notes vault?`);
   if (!confirmed) {
     return;
   }
 
-  state.vault.items = state.vault.items.filter((item) => item.id !== selected.id);
-  upsertTombstone(selected.id, new Date().toISOString());
+  state.vault.notes = state.vault.notes.filter((entry) => entry.id !== note.id);
+  upsertTombstone(note.id, new Date().toISOString());
   state.selectedId = chooseSelection();
   touchVault();
-  await persistVault("Entry deleted.");
+  await persistVault("Note deleted.");
   render();
-}
-
-function saveSyncSettings() {
-  state.syncSettings = {
-    owner: refs.syncOwner.value.trim(),
-    repo: refs.syncRepo.value.trim(),
-    branch: refs.syncBranch.value.trim() || "main",
-    path: refs.syncPath.value.trim() || "vault/cloud-notes.enc.json",
-  };
-
-  writeJsonStorage(SYNC_SETTINGS_KEY, state.syncSettings);
-
-  const token = refs.syncToken.value.trim();
-  if (token) {
-    sessionStorage.setItem(GITHUB_TOKEN_SESSION_KEY, token);
-  }
-
-  renderSyncSummary();
 }
 
 function readSyncToken() {
@@ -397,41 +298,31 @@ function readSyncToken() {
 
 async function pushVaultToGitHub() {
   if (!state.vault) {
-    showToast("Unlock your vault before syncing.");
+    showToast("Unlock your notes before syncing.");
     return;
   }
 
-  saveSyncSettings();
   const token = readSyncToken();
-  const settings = state.syncSettings;
-
-  if (!settings.owner || !settings.repo || !settings.branch || !settings.path) {
-    showToast("Fill in the GitHub owner, repo, branch, and vault path first.");
-    return;
-  }
-
   if (!token) {
-    showToast("Paste a GitHub token for this tab session before syncing.");
+    showToast("Add a GitHub token for this tab session before syncing.");
     return;
   }
 
   await persistVault();
 
   try {
-    const existing = await fetchGitHubFile(settings, token);
-    const content = encodeUtf8ToBase64(JSON.stringify(state.encryptedVault, null, 2));
-    const url = buildGitHubContentsUrl(settings);
+    const existing = await fetchGitHubFile(GITHUB_VAULT, token);
     const body = {
-      message: `Update encrypted vault ${new Date().toISOString()}`,
-      content,
-      branch: settings.branch,
+      message: `Update encrypted notes ${new Date().toISOString()}`,
+      content: encodeUtf8ToBase64(JSON.stringify(state.encryptedVault, null, 2)),
+      branch: GITHUB_VAULT.branch,
     };
 
     if (existing?.sha) {
       body.sha = existing.sha;
     }
 
-    const response = await fetch(url, {
+    const response = await fetch(buildGitHubContentsUrl(GITHUB_VAULT), {
       method: "PUT",
       headers: githubHeaders(token),
       body: JSON.stringify(body),
@@ -444,7 +335,7 @@ async function pushVaultToGitHub() {
     writeJsonStorage(LAST_SYNC_KEY, { at: new Date().toISOString(), mode: "push" });
     state.lastSync = readJsonStorage(LAST_SYNC_KEY, null);
     renderSyncSummary();
-    showToast("Encrypted vault pushed to GitHub.");
+    showToast("Encrypted notes pushed to GitHub.");
   } catch (error) {
     showToast(error.message || "GitHub push failed.");
   }
@@ -452,28 +343,20 @@ async function pushVaultToGitHub() {
 
 async function pullVaultFromGitHub() {
   if (!state.vault) {
-    showToast("Unlock your vault before syncing.");
+    showToast("Unlock your notes before syncing.");
     return;
   }
 
-  saveSyncSettings();
   const token = readSyncToken();
-  const settings = state.syncSettings;
-
-  if (!settings.owner || !settings.repo || !settings.branch || !settings.path) {
-    showToast("Fill in the GitHub owner, repo, branch, and vault path first.");
-    return;
-  }
-
   if (!token) {
-    showToast("Paste a GitHub token for this tab session before syncing.");
+    showToast("Add a GitHub token for this tab session before syncing.");
     return;
   }
 
   try {
-    const remoteFile = await fetchGitHubFile(settings, token);
+    const remoteFile = await fetchGitHubFile(GITHUB_VAULT, token);
     if (!remoteFile) {
-      showToast("No remote encrypted vault exists yet.");
+      showToast("No encrypted notes file exists in the vault repo yet.");
       return;
     }
 
@@ -485,7 +368,7 @@ async function pullVaultFromGitHub() {
     writeJsonStorage(LAST_SYNC_KEY, { at: new Date().toISOString(), mode: "pull" });
     state.lastSync = readJsonStorage(LAST_SYNC_KEY, null);
     render();
-    showToast("Remote vault pulled and merged locally.");
+    showToast("Encrypted notes pulled and merged.");
   } catch (error) {
     showToast(error.message || "GitHub pull failed.");
   }
@@ -493,7 +376,6 @@ async function pullVaultFromGitHub() {
 
 function render() {
   renderAuthState();
-  renderFilters();
   renderInstallState();
   renderSyncSummary();
 
@@ -506,7 +388,7 @@ function render() {
   }
 
   renderStats();
-  renderEntryList();
+  renderNoteList();
   renderEditor();
 }
 
@@ -521,7 +403,7 @@ function renderAuthState() {
 
   refs.setupForm.hidden = hasLocalVault;
   refs.unlockForm.hidden = !hasLocalVault;
-  refs.authTitle.textContent = hasLocalVault ? "Unlock your encrypted vault" : "Create your local vault";
+  refs.authTitle.textContent = hasLocalVault ? "Unlock your encrypted notes vault" : "Create your encrypted notes vault";
 }
 
 function renderInstallState() {
@@ -529,113 +411,89 @@ function renderInstallState() {
 }
 
 function renderStats() {
-  refs.vaultHeadline.textContent = `Your encrypted vault, ${formattedTime(state.vault.updatedAt)}`;
-  refs.itemCount.textContent = String(state.vault.items.length);
-  refs.passwordCount.textContent = String(state.vault.items.filter((item) => item.type === "password").length);
+  refs.vaultHeadline.textContent = `Your secure notes vault, ${formattedTime(state.vault.updatedAt)}`;
+  refs.noteCount.textContent = String(state.vault.notes.length);
   refs.saveStatus.textContent = formattedTime(state.vault.updatedAt);
 }
 
-function renderFilters() {
-  for (const button of refs.filterGroup.querySelectorAll("[data-filter]")) {
-    button.classList.toggle("is-active", button.dataset.filter === state.filter);
-  }
-}
+function renderNoteList() {
+  refs.noteList.innerHTML = "";
+  const notes = visibleNotes();
+  refs.visibleCount.textContent = `${notes.length} visible`;
 
-function renderEntryList() {
-  refs.entryList.innerHTML = "";
-  const items = visibleItems();
-  refs.visibleCount.textContent = `${items.length} visible`;
-
-  if (!items.length) {
+  if (!notes.length) {
     const empty = document.createElement("div");
     empty.className = "empty-list";
-    empty.textContent = state.search ? "No matches for this search yet." : "No entries yet. Create your first encrypted item.";
-    refs.entryList.append(empty);
+    empty.textContent = state.search ? "No notes match your search yet." : "No notes yet. Create your first secure note.";
+    refs.noteList.append(empty);
     return;
   }
 
-  for (const item of items) {
+  for (const note of notes) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "entry-card";
-    button.classList.toggle("is-selected", item.id === state.selectedId);
+    button.classList.toggle("is-selected", note.id === state.selectedId);
     button.addEventListener("click", () => {
-      state.selectedId = item.id;
+      state.selectedId = note.id;
       renderEditor();
-      renderEntryList();
+      renderNoteList();
     });
 
-    const headline = document.createElement("div");
-    headline.className = "entry-meta";
+    const meta = document.createElement("div");
+    meta.className = "entry-meta";
 
     const title = document.createElement("h4");
-    title.textContent = item.title;
-    headline.append(title);
+    title.textContent = note.title;
+    meta.append(title);
 
     const time = document.createElement("span");
     time.className = "mini-note";
-    time.textContent = formattedTime(item.updatedAt);
-    headline.append(time);
+    time.textContent = formattedTime(note.updatedAt);
+    meta.append(time);
 
-    const pillRow = document.createElement("div");
-    pillRow.className = "entry-pill-row";
+    const tags = document.createElement("div");
+    tags.className = "entry-pill-row";
 
     const pill = document.createElement("span");
-    pill.className = `pill ${item.type}`;
-    pill.textContent = labelForType(item.type);
-    pillRow.append(pill);
+    pill.className = "pill";
+    pill.textContent = "Note";
+    tags.append(pill);
 
-    const tags = document.createElement("span");
-    tags.className = "mini-note";
-    tags.textContent = item.tags.length ? item.tags.join(", ") : "No tags";
-    pillRow.append(tags);
+    const tagText = document.createElement("span");
+    tagText.className = "mini-note";
+    tagText.textContent = note.tags.length ? note.tags.join(", ") : "No tags";
+    tags.append(tagText);
 
     const summary = document.createElement("p");
     summary.className = "entry-summary";
-    summary.textContent = summaryForItem(item);
+    summary.textContent = note.content || "No content yet";
 
-    button.append(headline, pillRow, summary);
-    refs.entryList.append(button);
+    button.append(meta, tags, summary);
+    refs.noteList.append(button);
   }
 }
 
 function renderEditor() {
-  const selected = getSelectedEntry();
-  refs.entryForm.hidden = !selected;
-  refs.editorEmpty.hidden = Boolean(selected);
+  const note = getSelectedNote();
+  refs.noteForm.hidden = !note;
+  refs.editorEmpty.hidden = Boolean(note);
 
-  if (!selected) {
-    refs.editorTitle.textContent = "Select or create an item";
+  if (!note) {
+    refs.editorTitle.textContent = "Select or create a note";
     refs.editorUpdated.textContent = "No selection";
     return;
   }
 
-  refs.editorTitle.textContent = selected.title;
-  refs.editorUpdated.textContent = `Updated ${formattedTime(selected.updatedAt)}`;
-  refs.entryType.value = selected.type;
-  refs.entryTitle.value = selected.title;
-  refs.entryTags.value = selected.tags.join(", ");
-  refs.entryUsername.value = selected.username;
-  refs.entryUrl.value = selected.url;
-  refs.entryPassword.value = selected.password;
-  refs.entryContent.value = selected.content;
-  refs.entryPassword.type = "password";
-  refs.togglePasswordVisibility.textContent = "Show";
-  renderEditorFields();
-}
-
-function renderEditorFields() {
-  const type = refs.entryType.value;
-  const isPassword = type === "password";
-  refs.usernameField.hidden = !isPassword;
-  refs.urlField.hidden = !isPassword;
-  refs.passwordField.hidden = !isPassword;
-  refs.contentLabel.textContent = isPassword ? "Notes" : type === "snippet" ? "Private snippet" : "Body";
+  refs.editorTitle.textContent = note.title;
+  refs.editorUpdated.textContent = `Updated ${formattedTime(note.updatedAt)}`;
+  refs.noteTitle.value = note.title;
+  refs.noteTags.value = note.tags.join(", ");
+  refs.noteContent.value = note.content;
 }
 
 function renderSyncSummary() {
-  const configured = state.syncSettings.owner && state.syncSettings.repo;
-  refs.syncStatus.textContent = configured ? `${state.syncSettings.owner}/${state.syncSettings.repo}` : "Not configured";
+  refs.syncStatus.textContent = `${GITHUB_VAULT.owner}/${GITHUB_VAULT.repo}`;
   const lastSyncText = state.lastSync ? `${state.lastSync.mode} at ${formattedTime(state.lastSync.at)}` : "not yet run";
   refs.lastSyncNote.textContent = `Last sync: ${lastSyncText}`;
 }
@@ -647,7 +505,7 @@ function scheduleAutoLock() {
   }
 
   state.lockTimeout = window.setTimeout(() => {
-    lockVault("Vault auto-locked after inactivity.");
+    lockVault("Notes auto-locked after inactivity.");
   }, state.autoLockMinutes * 60 * 1000);
 }
 
@@ -664,19 +522,6 @@ async function persistVault(message) {
   }
 }
 
-function readJsonStorage(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJsonStorage(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
 function createStarterVault() {
   const now = new Date().toISOString();
   return normalizeVault({
@@ -684,17 +529,13 @@ function createStarterVault() {
     createdAt: now,
     updatedAt: now,
     deleted: [],
-    items: [
+    notes: [
       {
         id: crypto.randomUUID(),
-        type: "note",
         title: "Welcome to Cloud Notes",
-        tags: ["starter", "security"],
-        username: "",
-        url: "",
-        password: "",
+        tags: ["starter", "notes"],
         content:
-          "This vault stays encrypted before it syncs to GitHub.\n\nSuggestions:\n- Use a dedicated private repo for encrypted sync\n- Reuse the same passphrase across your devices\n- Keep your GitHub token scoped only to the repo you choose",
+          "This app is now focused on secure notes only.\n\nWhat changed:\n- One password unlocks all your notes\n- Search works after unlock\n- Sync is wired to a separate private GitHub vault repo\n- Notes are encrypted before local save and before GitHub sync",
         createdAt: now,
         updatedAt: now,
       },
@@ -708,79 +549,43 @@ function normalizeVault(vault) {
     createdAt: vault.createdAt || new Date().toISOString(),
     updatedAt: vault.updatedAt || new Date().toISOString(),
     deleted: Array.isArray(vault.deleted) ? vault.deleted.map(normalizeTombstone) : [],
-    items: Array.isArray(vault.items) ? vault.items.map(normalizeItem) : [],
+    notes: Array.isArray(vault.notes) ? vault.notes.map(normalizeNote) : [],
   };
 
-  normalized.items.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+  normalized.notes.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
   normalized.deleted.sort((left, right) => Date.parse(right.deletedAt) - Date.parse(left.deletedAt));
   return normalized;
 }
 
-function normalizeItem(item) {
+function normalizeNote(note) {
   const now = new Date().toISOString();
   return {
-    id: item.id || crypto.randomUUID(),
-    type: ["note", "password", "snippet"].includes(item.type) ? item.type : "note",
-    title: item.title || "Untitled note",
-    tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : [],
-    username: item.username || "",
-    url: item.url || "",
-    password: item.password || "",
-    content: item.content || "",
-    createdAt: item.createdAt || now,
-    updatedAt: item.updatedAt || now,
+    id: note.id || crypto.randomUUID(),
+    title: note.title || "Untitled note",
+    tags: Array.isArray(note.tags) ? note.tags.filter(Boolean) : [],
+    content: note.content || "",
+    createdAt: note.createdAt || now,
+    updatedAt: note.updatedAt || now,
   };
 }
 
-function normalizeTombstone(tombstone) {
+function normalizeTombstone(entry) {
   return {
-    id: tombstone.id,
-    deletedAt: tombstone.deletedAt || new Date().toISOString(),
+    id: entry.id,
+    deletedAt: entry.deletedAt || new Date().toISOString(),
   };
 }
 
-function buildEntry(type) {
+function buildNote() {
   const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
-    type,
-    title: defaultTitleForType(type),
+    title: "New note",
     tags: [],
-    username: "",
-    url: "",
-    password: "",
     content: "",
     createdAt: now,
     updatedAt: now,
   };
-}
-
-function defaultTitleForType(type) {
-  if (type === "password") {
-    return "New password";
-  }
-  if (type === "snippet") {
-    return "New private snippet";
-  }
-  return "New note";
-}
-
-function labelForType(type) {
-  if (type === "password") {
-    return "Password";
-  }
-  if (type === "snippet") {
-    return "Snippet";
-  }
-  return "Note";
-}
-
-function summaryForItem(item) {
-  if (item.type === "password") {
-    const parts = [item.username, item.url, item.content].filter(Boolean);
-    return parts.join(" | ") || "Stored password entry";
-  }
-  return item.content || "No content yet";
 }
 
 function parseTags(raw) {
@@ -791,44 +596,37 @@ function parseTags(raw) {
     .slice(0, 12);
 }
 
-function visibleItems() {
+function visibleNotes() {
   if (!state.vault) {
     return [];
   }
 
-  return state.vault.items.filter((item) => {
-    const filterMatches = state.filter === "all" || item.type === state.filter;
-    if (!filterMatches) {
-      return false;
-    }
+  if (!state.search) {
+    return state.vault.notes;
+  }
 
-    if (!state.search) {
-      return true;
-    }
-
-    const haystack = [item.title, item.content, item.username, item.url, item.tags.join(" ")]
-      .join(" ")
-      .toLowerCase();
+  return state.vault.notes.filter((note) => {
+    const haystack = [note.title, note.content, note.tags.join(" ")].join(" ").toLowerCase();
     return haystack.includes(state.search);
   });
 }
 
-function getSelectedEntry() {
+function getSelectedNote() {
   if (!state.vault || !state.selectedId) {
     return null;
   }
-  return state.vault.items.find((item) => item.id === state.selectedId) || null;
+  return state.vault.notes.find((note) => note.id === state.selectedId) || null;
 }
 
 function chooseSelection() {
-  const items = state.vault?.items ?? [];
-  if (!items.length) {
+  const notes = state.vault?.notes ?? [];
+  if (!notes.length) {
     return null;
   }
-  if (state.selectedId && items.some((item) => item.id === state.selectedId)) {
+  if (state.selectedId && notes.some((note) => note.id === state.selectedId)) {
     return state.selectedId;
   }
-  return items[0].id;
+  return notes[0].id;
 }
 
 function touchVault(timestamp = new Date().toISOString()) {
@@ -847,7 +645,7 @@ function upsertTombstone(id, deletedAt) {
 function mergeVaults(localVault, remoteVault) {
   const local = normalizeVault(localVault);
   const remote = normalizeVault(remoteVault);
-  const itemMap = new Map();
+  const noteMap = new Map();
   const tombstoneMap = new Map();
 
   for (const tombstone of [...local.deleted, ...remote.deleted]) {
@@ -857,28 +655,27 @@ function mergeVaults(localVault, remoteVault) {
     }
   }
 
-  for (const item of [...local.items, ...remote.items]) {
-    const previous = itemMap.get(item.id);
-    if (!previous || Date.parse(item.updatedAt) > Date.parse(previous.updatedAt)) {
-      itemMap.set(item.id, item);
+  for (const note of [...local.notes, ...remote.notes]) {
+    const previous = noteMap.get(note.id);
+    if (!previous || Date.parse(note.updatedAt) > Date.parse(previous.updatedAt)) {
+      noteMap.set(note.id, note);
     }
   }
 
-  const mergedItems = [];
-  for (const item of itemMap.values()) {
-    const tombstone = tombstoneMap.get(item.id);
-    if (!tombstone || Date.parse(item.updatedAt) >= Date.parse(tombstone.deletedAt)) {
-      mergedItems.push(item);
+  const mergedNotes = [];
+  for (const note of noteMap.values()) {
+    const tombstone = tombstoneMap.get(note.id);
+    if (!tombstone || Date.parse(note.updatedAt) >= Date.parse(tombstone.deletedAt)) {
+      mergedNotes.push(note);
     }
   }
 
-  const mergedUpdatedAt = [local.updatedAt, remote.updatedAt].sort().at(-1);
   return normalizeVault({
     version: 1,
     createdAt: [local.createdAt, remote.createdAt].sort()[0],
-    updatedAt: mergedUpdatedAt,
+    updatedAt: [local.updatedAt, remote.updatedAt].sort().at(-1),
     deleted: [...tombstoneMap.values()],
-    items: mergedItems,
+    notes: mergedNotes,
   });
 }
 
@@ -891,17 +688,6 @@ function formattedTime(value) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function generatePassword(length = 20) {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+";
-  const random = new Uint32Array(length);
-  crypto.getRandomValues(random);
-  let password = "";
-  for (let index = 0; index < length; index += 1) {
-    password += alphabet[random[index] % alphabet.length];
-  }
-  return password;
 }
 
 function showToast(message) {
@@ -941,7 +727,7 @@ async function decryptVault(payload, passphrase) {
     const text = new TextDecoder().decode(plainBuffer);
     return JSON.parse(text);
   } catch {
-    throw new Error("Passphrase mismatch or vault data is corrupted.");
+    throw new Error("Password mismatch or vault data is corrupted.");
   }
 }
 
@@ -1042,6 +828,19 @@ async function extractGitHubError(response) {
     return `GitHub API request failed with status ${response.status}.`;
   }
   return `GitHub API request failed with status ${response.status}.`;
+}
+
+function readJsonStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonStorage(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
 }
 
 async function openDb() {
