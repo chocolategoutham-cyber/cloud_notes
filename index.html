@@ -18,16 +18,15 @@
     <div class="page-shell">
       <header class="hero surface">
         <div class="hero-copy">
-          <p class="eyebrow">Cloudflare-only password manager</p>
-          <h1>Create an account, unlock your vault, and manage website passwords securely.</h1>
+          <p class="eyebrow">Cloudflare-backed encrypted password manager</p>
+          <h1>Secure password management, encrypted end-to-end.</h1>
           <p class="lead">
-            Your account uses backend auth, but your password vault is encrypted in the browser with your master
-            password before it is stored in Cloudflare.
+            Create an account and your passwords are encrypted in your browser with your password before being sent to Cloudflare D1 storage.
           </p>
           <div class="hero-status">
-            <span class="pill">Signup / Login</span>
-            <span class="pill">Master-password vault</span>
+            <span class="pill">Login & Auto Encryption</span>
             <span class="pill">Cloudflare D1 storage</span>
+            <span class="pill">Zero-knowledge vault</span>
           </div>
         </div>
         <div class="hero-actions">
@@ -40,67 +39,107 @@
 
       <main class="main-grid">
         <section class="surface auth-surface" id="account-surface">
-          <div class="section-heading">
-            <p class="section-kicker">Account</p>
-            <h2>Login or create your account</h2>
-          </div>
+          <div class="auth-container">
+            <!-- Login/Signup Screen -->
+            <div id="legacy-screen" class="auth-screen active-screen">
+              <div class="auth-header">
+                <h1>Cloud Vault</h1>
+                <p>Secure password manager with 2FA protection</p>
+              </div>
 
-          <div class="auth-panels">
-            <form id="login-form" class="auth-form">
-              <label>
-                Username
-                <input id="login-username" type="text" autocomplete="username" required />
-              </label>
-              <label>
-                Login password
-                <input id="login-password" type="password" autocomplete="current-password" required />
-              </label>
-              <button class="primary-button" type="submit">Login</button>
-            </form>
+              <div class="auth-tabs">
+                <button class="tab-btn active" data-tab="login">Login</button>
+                <button class="tab-btn" data-tab="signup">Create Account</button>
+              </div>
 
-            <form id="signup-form" class="auth-form">
-              <label>
-                New username
-                <input id="signup-username" type="text" autocomplete="username" minlength="3" required />
-              </label>
-              <label>
-                Login password
-                <input id="signup-password" type="password" autocomplete="new-password" minlength="10" required />
-              </label>
-              <button class="secondary-button" type="submit">Create account</button>
-              <p class="mini-note">This password protects your account session. Your vault uses a separate master password.</p>
-            </form>
-          </div>
-        </section>
+              <form id="login-form" class="auth-form active-tab">
+                <label>
+                  Username
+                  <input id="login-username" type="text" autocomplete="username" required />
+                </label>
+                <label>
+                  Password
+                  <input id="login-password" type="password" autocomplete="current-password" required />
+                </label>
+                <button class="primary-button" type="submit">Login</button>
+                <p class="form-note">You'll be asked to verify with your authenticator app if 2FA is enabled.</p>
+              </form>
 
-        <section class="surface auth-surface" id="vault-surface" hidden>
-          <div class="section-heading">
-            <p class="section-kicker">Vault access</p>
-            <h2 id="vault-auth-title">Create your master password</h2>
-          </div>
+              <form id="signup-form" class="auth-form">
+                <label>
+                  Username
+                  <input id="signup-username" type="text" autocomplete="username" minlength="3" required />
+                </label>
+                <label>
+                  Password
+                  <input id="signup-password" type="password" autocomplete="new-password" minlength="10" required />
+                </label>
+                <label>
+                  Confirm Password
+                  <input id="signup-password-confirm" type="password" autocomplete="new-password" minlength="10" required />
+                </label>
+                <button class="primary-button" type="submit">Create Account</button>
+                <p class="form-note">Set up two-factor authentication on your next login for extra security.</p>
+              </form>
+            </div>
 
-          <div class="auth-panels">
-            <form id="vault-create-form" class="auth-form">
-              <label>
-                Master password
-                <input id="master-password" type="password" autocomplete="new-password" minlength="10" required />
-              </label>
-              <label>
-                Confirm master password
-                <input id="master-password-confirm" type="password" autocomplete="new-password" minlength="10" required />
-              </label>
-              <button class="primary-button" type="submit">Create encrypted vault</button>
-              <p class="mini-note">This encrypts your saved websites, usernames, and passwords in the browser.</p>
-            </form>
+            <!-- TOTP Verification Screen (During login if 2FA enabled) -->
+            <div id="totp-verify-screen" class="auth-screen">
+              <div class="auth-header">
+                <h1>Two-Factor Authentication</h1>
+                <p>Enter the 6-digit code from your authenticator app</p>
+              </div>
+              <form id="totp-verify-form" class="auth-form">
+                <label>
+                  Authenticator Code
+                  <input 
+                    id="totp-verify-input" 
+                    type="text" 
+                    inputmode="numeric"
+                    maxlength="6"
+                    placeholder="000000"
+                    pattern="[0-9]{6}"
+                    required 
+                    autofocus
+                  />
+                </label>
+                <button class="primary-button" type="submit">Verify</button>
+                <p class="form-note">⏱️ This code expires every 60 seconds. Get a new code from your authenticator app.</p>
+              </form>
+            </div>
 
-            <form id="vault-unlock-form" class="auth-form" hidden>
-              <label>
-                Master password
-                <input id="unlock-master-password" type="password" autocomplete="current-password" required />
-              </label>
-              <button class="primary-button" type="submit">Unlock vault</button>
-              <p class="mini-note">Your encrypted vault is downloaded from Cloudflare and decrypted only in this browser session.</p>
-            </form>
+            <!-- TOTP Setup Screen (First-time 2FA setup) -->
+            <div id="totp-setup-screen" class="auth-screen">
+              <div class="auth-header">
+                <h1>Enable Two-Factor Authentication</h1>
+                <p>Scan this QR code with your authenticator app (Google Authenticator, Authy, Microsoft Authenticator, etc.)</p>
+              </div>
+              <div class="totp-setup-container">
+                <div id="qrcode-container" class="qrcode-box"></div>
+                <p class="form-note">Can't scan? Enter this code manually:</p>
+                <div class="totp-secret-box">
+                  <code id="totp-secret-text">Loading...</code>
+                  <button type="button" class="copy-button" id="copy-secret-button">Copy</button>
+                </div>
+              </div>
+              <form id="totp-setup-form" class="auth-form">
+                <label>
+                  Enter 6-digit code to confirm setup
+                  <input 
+                    id="totp-setup-input" 
+                    type="text" 
+                    inputmode="numeric"
+                    maxlength="6"
+                    placeholder="000000"
+                    pattern="[0-9]{6}"
+                    required 
+                    autofocus
+                  />
+                </label>
+                <button class="primary-button" type="submit">Verify & Enable 2FA</button>
+                <button type="button" class="secondary-button" id="skip-totp-button">Skip for now</button>
+              </form>
+            </div>
           </div>
         </section>
 

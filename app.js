@@ -10,28 +10,43 @@ const state = {
   selectedId: null,
   search: "",
   loading: false,
-  masterPassword: "",
+  encryptionPassword: "",
+  // TOTP state
+  totp2faRequired: false,
+  totpSecret: null,
+  totpUri: null,
+  totpSetupMode: false,
 };
 
 const refs = {
   accountSurface: document.querySelector("#account-surface"),
-  vaultSurface: document.querySelector("#vault-surface"),
   appShell: document.querySelector("#app-shell"),
   installButton: document.querySelector("#install-button"),
   logoutButton: document.querySelector("#logout-button"),
   lockButton: document.querySelector("#lock-button"),
+  // Auth screens
+  legacyScreen: document.querySelector("#legacy-screen"),
+  totpVerifyScreen: document.querySelector("#totp-verify-screen"),
+  totpSetupScreen: document.querySelector("#totp-setup-screen"),
+  // Login/Signup
   loginForm: document.querySelector("#login-form"),
   signupForm: document.querySelector("#signup-form"),
   loginUsername: document.querySelector("#login-username"),
   loginPassword: document.querySelector("#login-password"),
   signupUsername: document.querySelector("#signup-username"),
   signupPassword: document.querySelector("#signup-password"),
-  vaultAuthTitle: document.querySelector("#vault-auth-title"),
-  vaultCreateForm: document.querySelector("#vault-create-form"),
-  vaultUnlockForm: document.querySelector("#vault-unlock-form"),
-  masterPassword: document.querySelector("#master-password"),
-  masterPasswordConfirm: document.querySelector("#master-password-confirm"),
-  unlockMasterPassword: document.querySelector("#unlock-master-password"),
+  signupPasswordConfirm: document.querySelector("#signup-password-confirm"),
+  // TOTP Verify
+  totpVerifyForm: document.querySelector("#totp-verify-form"),
+  totpVerifyInput: document.querySelector("#totp-verify-input"),
+  // TOTP Setup
+  totpSetupForm: document.querySelector("#totp-setup-form"),
+  totpSetupInput: document.querySelector("#totp-setup-input"),
+  totpSecretText: document.querySelector("#totp-secret-text"),
+  qrcodeContainer: document.querySelector("#qrcode-container"),
+  copySecretButton: document.querySelector("#copy-secret-button"),
+  skipTotpButton: document.querySelector("#skip-totp-button"),
+  // Vault display
   currentUser: document.querySelector("#current-user"),
   entryCount: document.querySelector("#entry-count"),
   syncStatus: document.querySelector("#sync-status"),
@@ -71,6 +86,23 @@ async function initializeApp() {
 }
 
 function bindEvents() {
+  // Tab switching
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      tabBtns.forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".auth-form").forEach((f) => f.classList.remove("active-tab"));
+      
+      btn.classList.add("active");
+      if (tab === "login") {
+        refs.loginForm.classList.add("active-tab");
+      } else {
+        refs.signupForm.classList.add("active-tab");
+      }
+    });
+  });
+
   refs.loginForm.addEventListener("submit", (event) => {
     event.preventDefault();
     void login();
@@ -81,14 +113,26 @@ function bindEvents() {
     void signup();
   });
 
-  refs.vaultCreateForm.addEventListener("submit", (event) => {
+  refs.totpVerifyForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    void createVault();
+    void verifyTotp();
   });
 
-  refs.vaultUnlockForm.addEventListener("submit", (event) => {
+  refs.totpSetupForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    void unlockVault();
+    void confirmTotpSetup();
+  });
+
+  refs.skipTotpButton.addEventListener("click", () => void skipTotpSetup());
+  refs.copySecretButton.addEventListener("click", () => copyTotpSecret());
+
+  // Auto-format TOTP inputs (only accept numbers)
+  [refs.totpVerifyInput, refs.totpSetupInput].forEach((input) => {
+    if (input) {
+      input.addEventListener("input", (e) => {
+        e.target.value = e.target.value.replace(/[^0-9]/g, "");
+      });
+    }
   });
 
   refs.logoutButton.addEventListener("click", () => void logout());
@@ -137,6 +181,137 @@ function bindEvents() {
   });
 }
 
+// TOTP Management Functions
+function showScreen(screenName) {
+  document.querySelectorAll(".auth-screen").forEach((screen) => {
+    screen.classList.remove("active-screen");
+  });
+  const screen = document.querySelector(`#${screenName}`);
+  if (screen) {
+    screen.classList.add("active-screen");
+  }
+}
+
+function generateTotpSecret() {
+  const length = 32;
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let secret = "";
+  for (let i = 0; i < length; i++) {
+    secret += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return secret;
+}
+
+function generateTotpUri(secret, username, issuer = "Cloud Vault") {
+  return `otpauth://totp/${issuer}:${username}?secret=${secret}&issuer=${issuer}`;
+}
+
+function generateQrCode(uri) {
+  const container = refs.qrcodeContainer;
+  container.innerHTML = "";
+  
+  // Use Google Charts API to generate QR code
+  const encodedUri = encodeURIComponent(uri);
+  const img = document.createElement("img");
+  img.src = `https://chart.googleapis.com/chart?chs=256x256&chld=L|0&cht=qr&chl=${encodedUri}`;
+  img.alt = "TOTP QR Code";
+  img.style.maxWidth = "100%";
+  img.style.height = "auto";
+  container.appendChild(img);
+}
+
+function copyTotpSecret() {
+  const secret = state.totpSecret;
+  if (!secret) return;
+  
+  navigator.clipboard.writeText(secret).then(() => {
+    const btn = refs.copySecretButton;
+    const originalText = btn.textContent;
+    btn.textContent = "✓ Copied!";
+    btn.classList.add("copied");
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.classList.remove("copied");
+    }, 2000);
+  });
+}
+
+async function verifyTotp() {
+  const code = refs.totpVerifyInput.value.trim();
+  
+  if (code.length !== 6) {
+    showToast("Please enter a 6-digit code.");
+    return;
+  }
+
+  await withLoading(async () => {
+    try {
+      const response = await api("/verify-totp", {
+        method: "POST",
+        body: JSON.stringify({ 
+          code,
+          username: state.session?.username 
+        }),
+      });
+      
+      if (response.verified) {
+        state.totp2faRequired = false;
+        refs.totpVerifyInput.value = "";
+        showToast("2FA verified successfully!");
+        showScreen("legacy-screen");
+        render();
+      } else {
+        showToast("Invalid code. Please try again.");
+      }
+    } catch (error) {
+      showToast("Error verifying code. Please try again.");
+    }
+  });
+}
+
+async function confirmTotpSetup() {
+  const code = refs.totpSetupInput.value.trim();
+  
+  if (code.length !== 6) {
+    showToast("Please enter a 6-digit code.");
+    return;
+  }
+
+  await withLoading(async () => {
+    try {
+      const response = await api("/setup-totp", {
+        method: "POST",
+        body: JSON.stringify({ 
+          secret: state.totpSecret,
+          code,
+        }),
+      });
+      
+      if (response.success) {
+        state.totpSetupMode = false;
+        state.totpSecret = null;
+        state.totpUri = null;
+        refs.totpSetupInput.value = "";
+        showToast("2FA enabled! Your authenticator is now active.");
+        showScreen("legacy-screen");
+        render();
+      } else {
+        showToast("Invalid code. Please check and try again.");
+      }
+    } catch (error) {
+      showToast("Error setting up 2FA. Please try again.");
+    }
+  });
+}
+
+async function skipTotpSetup() {
+  state.totpSetupMode = false;
+  state.totpSecret = null;
+  state.totpUri = null;
+  showScreen("legacy-screen");
+  render();
+}
+
 async function hydrateSession() {
   try {
     const session = await api("/session");
@@ -154,13 +329,18 @@ async function hydrateSession() {
 async function signup() {
   const username = refs.signupUsername.value.trim();
   const password = refs.signupPassword.value;
+  const confirm = refs.signupPasswordConfirm.value;
 
   if (username.length < 3) {
     showToast("Username must be at least 3 characters.");
     return;
   }
   if (password.length < 10) {
-    showToast("Login password must be at least 10 characters.");
+    showToast("Password must be at least 10 characters.");
+    return;
+  }
+  if (password !== confirm) {
+    showToast("Passwords do not match.");
     return;
   }
 
@@ -170,28 +350,68 @@ async function signup() {
       body: JSON.stringify({ username, password }),
     });
     state.session = response.user;
+    state.encryptionPassword = password;
+    state.vault = createEmptyVault();
     state.encryptedVault = null;
+    
+    // Offer TOTP setup
+    state.totpSetupMode = true;
+    state.totpSecret = generateTotpSecret();
+    state.totpUri = generateTotpUri(state.totpSecret, username);
+    
     refs.signupForm.reset();
     refs.loginForm.reset();
-    render();
-    showToast("Account created.");
+    refs.totpSecretText.textContent = state.totpSecret;
+    generateQrCode(state.totpUri);
+    refs.totpSetupInput.value = "";
+    refs.totpSetupInput.focus();
+    
+    showScreen("totp-setup-screen");
+    showToast("Account created! Set up 2FA for extra security.");
   });
 }
 
 async function login() {
+  const username = refs.loginUsername.value.trim();
+  const password = refs.loginPassword.value;
+
   await withLoading(async () => {
     const response = await api("/login", {
       method: "POST",
-      body: JSON.stringify({
-        username: refs.loginUsername.value.trim(),
-        password: refs.loginPassword.value,
-      }),
+      body: JSON.stringify({ username, password }),
     });
     state.session = response.user;
     state.encryptedVault = response.vault;
-    refs.loginForm.reset();
-    render();
-    showToast("Logged in.");
+    state.encryptionPassword = password;
+
+    // Check if 2FA is required
+    if (response.totpRequired) {
+      state.totp2faRequired = true;
+      refs.totpVerifyInput.value = "";
+      refs.totpVerifyInput.focus();
+      showScreen("totp-verify-screen");
+      showToast("Enter your authenticator code.");
+    } else {
+      // Auto-unlock vault with password
+      if (state.encryptedVault) {
+        try {
+          state.vault = await decryptVault(state.encryptedVault, password);
+          state.selectedId = state.vault.entries[0]?.id ?? null;
+        } catch {
+          showToast("Failed to decrypt vault. Password may be incorrect.");
+          state.vault = null;
+          state.selectedId = null;
+        }
+      } else {
+        // Create empty vault on first login
+        state.vault = createEmptyVault();
+        state.selectedId = null;
+      }
+
+      refs.loginForm.reset();
+      render();
+      showToast("Logged in successfully.");
+    }
   });
 }
 
@@ -201,56 +421,22 @@ async function logout() {
     state.session = null;
     state.vault = null;
     state.encryptedVault = null;
-    state.masterPassword = "";
+    state.encryptionPassword = "";
     state.selectedId = null;
     state.search = "";
+    state.totp2faRequired = false;
+    state.totpSecret = null;
+    state.totpUri = null;
+    state.totpSetupMode = false;
     refs.searchInput.value = "";
     render();
     showToast("Logged out.");
   });
 }
 
-async function createVault() {
-  const password = refs.masterPassword.value;
-  const confirm = refs.masterPasswordConfirm.value;
-  if (password.length < 10) {
-    showToast("Master password must be at least 10 characters.");
-    return;
-  }
-  if (password !== confirm) {
-    showToast("Master passwords do not match.");
-    return;
-  }
-
-  state.masterPassword = password;
-  state.vault = createEmptyVault();
-  state.selectedId = null;
-  refs.vaultCreateForm.reset();
-  await persistVaultToBackend("Encrypted vault created.");
-  render();
-}
-
-async function unlockVault() {
-  if (!state.encryptedVault) {
-    showToast("No encrypted vault found.");
-    return;
-  }
-
-  try {
-    state.masterPassword = refs.unlockMasterPassword.value;
-    state.vault = await decryptVault(state.encryptedVault, state.masterPassword);
-    state.selectedId = state.vault.entries[0]?.id ?? null;
-    refs.vaultUnlockForm.reset();
-    render();
-    showToast("Vault unlocked.");
-  } catch {
-    showToast("Master password is incorrect.");
-  }
-}
-
 function lockVault(message) {
   state.vault = null;
-  state.masterPassword = "";
+  state.encryptionPassword = "";
   state.selectedId = null;
   render();
   if (message) {
@@ -315,12 +501,12 @@ async function deleteEntry() {
 }
 
 async function persistVaultToBackend(successMessage) {
-  if (!state.session || !state.vault || !state.masterPassword) {
+  if (!state.session || !state.vault || !state.encryptionPassword) {
     return;
   }
 
   await withLoading(async () => {
-    state.encryptedVault = await encryptVault(state.vault, state.masterPassword);
+    state.encryptedVault = await encryptVault(state.vault, state.encryptionPassword);
     await api("/vault", {
       method: "PUT",
       body: JSON.stringify({ encryptedVault: state.encryptedVault }),
@@ -335,21 +521,30 @@ function render() {
   const loggedIn = Boolean(state.session);
   const unlocked = Boolean(state.vault);
 
-  refs.accountSurface.hidden = loggedIn;
-  refs.vaultSurface.hidden = !loggedIn || unlocked;
-  refs.appShell.hidden = !loggedIn || !unlocked;
-  refs.logoutButton.hidden = !loggedIn;
-  refs.lockButton.hidden = !unlocked;
-
+  // Handle authentication screens
   if (!loggedIn) {
+    refs.accountSurface.hidden = false;
+    refs.appShell.hidden = true;
+    refs.logoutButton.hidden = true;
+    refs.lockButton.hidden = true;
+    
+    // Show appropriate auth screen
+    if (state.totpSetupMode) {
+      showScreen("totp-setup-screen");
+    } else if (state.totp2faRequired) {
+      showScreen("totp-verify-screen");
+    } else {
+      showScreen("legacy-screen");
+    }
     refs.syncStatus.textContent = state.loading ? "Working" : "Idle";
     return;
   }
 
-  const hasVault = Boolean(state.encryptedVault);
-  refs.vaultAuthTitle.textContent = hasVault ? "Unlock your master-password vault" : "Create your master password";
-  refs.vaultCreateForm.hidden = hasVault;
-  refs.vaultUnlockForm.hidden = !hasVault;
+  // Handle vault access
+  refs.accountSurface.hidden = true;
+  refs.appShell.hidden = !unlocked;
+  refs.logoutButton.hidden = false;
+  refs.lockButton.hidden = !unlocked;
 
   if (!unlocked) {
     refs.syncStatus.textContent = state.loading ? "Working" : "Locked";

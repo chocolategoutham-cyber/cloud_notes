@@ -201,15 +201,184 @@ p {
   padding: 1.6rem;
   display: grid;
   gap: 1.35rem;
+  max-width: 480px;
+  margin: 2rem auto;
 }
 
-.auth-panels {
+.auth-container {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.auth-header {
+  text-align: center;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-header h1 {
+  font-size: 2rem;
+  margin: 0;
+}
+
+.auth-header p {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid rgba(21, 34, 56, 0.12);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 1rem;
+  background: transparent;
+  color: var(--ink-soft);
+  border: 0;
+  border-bottom: 3px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.tab-btn:hover {
+  color: var(--ink);
+}
+
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.auth-form {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  visibility: hidden;
 }
 
-.auth-form,
+.auth-form.active-tab {
+  opacity: 1;
+  pointer-events: auto;
+  position: relative;
+  visibility: visible;
+}
+
+.form-note {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-top: 0.25rem;
+}
+
+.auth-screen {
+  display: none;
+  animation: rise-in 300ms ease both;
+}
+
+.auth-screen.active-screen {
+  display: block;
+}
+
+.totp-setup-container {
+  display: grid;
+  gap: 1.5rem;
+  align-items: center;
+  margin: 1.5rem 0;
+}
+
+.qrcode-box {
+  background: white;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  border: 2px solid var(--border);
+}
+
+.qrcode-box canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+.totp-secret-box {
+  background: rgba(21, 34, 56, 0.06);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+
+.totp-secret-box code {
+  flex: 1;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.15em;
+}
+
+.copy-button {
+  padding: 0.6rem 0.9rem;
+  background: var(--accent);
+  color: white;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.copy-button:hover {
+  background: var(--accent-deep);
+  transform: translateY(-1px);
+}
+
+.copy-button.copied {
+  background: var(--teal);
+}
+
+.totp-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  background: rgba(209, 91, 49, 0.12);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.totp-timer-bar {
+  width: 24px;
+  height: 4px;
+  background: rgba(209, 91, 49, 0.3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.totp-timer-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s linear;
+}
+
 .sync-form,
 .editor-form {
   display: grid;
