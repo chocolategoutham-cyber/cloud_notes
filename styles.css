@@ -77,7 +77,8 @@ textarea {
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.84);
   color: var(--ink);
-  transition: border-color var(--transition), transform var(--transition), background var(--transition);
+  transition: border-color var(--transition), transform var(--transition), background var(--transition), box-shadow var(--transition);
+  font-size: 1rem;
 }
 
 input:focus,
@@ -87,6 +88,7 @@ textarea:focus {
   border-color: rgba(209, 91, 49, 0.48);
   background: #fffaf6;
   transform: translateY(-1px);
+  box-shadow: 0 0 0 3px rgba(209, 91, 49, 0.1);
 }
 
 textarea {
@@ -203,6 +205,7 @@ p {
   gap: 1.35rem;
   max-width: 480px;
   margin: 2rem auto;
+  position: relative;
 }
 
 .auth-container {
@@ -214,11 +217,16 @@ p {
   text-align: center;
   display: grid;
   gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .auth-header h1 {
   font-size: 2rem;
   margin: 0;
+  background: linear-gradient(135deg, var(--accent), var(--teal));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .auth-header p {
@@ -262,6 +270,7 @@ p {
   pointer-events: none;
   position: absolute;
   visibility: hidden;
+  animation: fade-out 200ms ease forwards;
 }
 
 .auth-form.active-tab {
@@ -269,6 +278,7 @@ p {
   pointer-events: auto;
   position: relative;
   visibility: visible;
+  animation: fade-in 300ms ease forwards;
 }
 
 .form-note {
@@ -292,17 +302,22 @@ p {
   gap: 1.5rem;
   align-items: center;
   margin: 1.5rem 0;
+  padding: 1.5rem;
+  background: rgba(47, 127, 133, 0.06);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(47, 127, 133, 0.15);
 }
 
 .qrcode-box {
   background: white;
-  padding: 1rem;
+  padding: 1.2rem;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 280px;
   border: 2px solid var(--border);
+  box-shadow: 0 4px 12px rgba(21, 34, 56, 0.08);
 }
 
 .qrcode-box canvas {
@@ -624,12 +639,27 @@ p {
   padding: 0.85rem 1.2rem;
   font-weight: 700;
   transition: transform var(--transition), box-shadow var(--transition), background var(--transition), color var(--transition);
+  position: relative;
+  overflow: hidden;
 }
 
 .primary-button {
   background: linear-gradient(135deg, var(--accent), #de815b);
   color: #fffaf4;
   box-shadow: 0 14px 30px rgba(209, 91, 49, 0.28);
+}
+
+.primary-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, 0.3), transparent 50%);
+  opacity: 0;
+  transition: opacity 300ms;
+}
+
+.primary-button:hover::before {
+  opacity: 1;
 }
 
 .secondary-button {
@@ -665,6 +695,7 @@ p {
 .danger-button:focus-visible,
 .inline-button:focus-visible {
   transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(21, 34, 56, 0.12);
 }
 
 .empty-list {
@@ -705,6 +736,24 @@ p {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 
