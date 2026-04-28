@@ -21,16 +21,14 @@ const state = {
 };
 
 const refs = {
-  accountSurface: document.querySelector("#account-surface"),
-  appShell: document.querySelector("#app-shell"),
-  installButton: document.querySelector("#install-button"),
-  logoutButton: document.querySelector("#logout-button"),
-  lockButton: document.querySelector("#lock-button"),
-  // Auth screens
-  legacyScreen: document.querySelector("#legacy-screen"),
+  // Pages
+  authPage: document.querySelector("#auth-page"),
+  vaultPage: document.querySelector("#vault-page"),
+  // Auth screens container
+  authMainScreen: document.querySelector("#auth-main-screen"),
   totpVerifyScreen: document.querySelector("#totp-verify-screen"),
   totpSetupScreen: document.querySelector("#totp-setup-screen"),
-  // Login/Signup
+  // Login/Signup forms
   loginForm: document.querySelector("#login-form"),
   signupForm: document.querySelector("#signup-form"),
   loginUsername: document.querySelector("#login-username"),
@@ -49,20 +47,24 @@ const refs = {
   qrcodeContainer: document.querySelector("#qrcode-container"),
   copySecretButton: document.querySelector("#copy-secret-button"),
   skipTotpButton: document.querySelector("#skip-totp-button"),
-  // Vault display
+  // Vault header
   currentUser: document.querySelector("#current-user"),
+  lockButton: document.querySelector("#lock-button"),
+  logoutButton: document.querySelector("#logout-button"),
+  // Vault main
   entryCount: document.querySelector("#entry-count"),
-  syncStatus: document.querySelector("#sync-status"),
   searchInput: document.querySelector("#search-input"),
+  entryList: document.querySelector("#entry-list"),
   newEntryButton: document.querySelector("#new-entry-button"),
   syncButton: document.querySelector("#sync-button"),
   registerPasskeyButton: document.querySelector("#register-passkey-button"),
-  entryList: document.querySelector("#entry-list"),
-  visibleCount: document.querySelector("#visible-count"),
+  syncStatus: document.querySelector("#sync-status"),
+  // Vault editor
+  editorEmpty: document.querySelector("#editor-empty"),
+  editorContent: document.querySelector("#editor-content"),
   editorTitle: document.querySelector("#editor-title"),
   editorUpdated: document.querySelector("#editor-updated"),
   entryForm: document.querySelector("#entry-form"),
-  editorEmpty: document.querySelector("#editor-empty"),
   entryWebsite: document.querySelector("#entry-website"),
   entryUsername: document.querySelector("#entry-username"),
   entryPassword: document.querySelector("#entry-password"),
@@ -71,9 +73,7 @@ const refs = {
   copyPasswordButton: document.querySelector("#copy-password-button"),
   generatePasswordButton: document.querySelector("#generate-password-button"),
   deleteEntryButton: document.querySelector("#delete-entry-button"),
-  apiStatus: document.querySelector("#api-status"),
-  apiBaseValue: document.querySelector("#api-base-value"),
-  vaultHeadline: document.querySelector("#vault-headline"),
+  // Toast
   toast: document.querySelector("#toast"),
 };
 
@@ -83,9 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initializeApp() {
   bindEvents();
-  registerInstallPrompt();
   registerServiceWorker();
-  refs.apiBaseValue.textContent = API_BASE;
   await hydrateSession();
 }
 
@@ -159,7 +157,7 @@ function bindEvents() {
 
   refs.togglePasswordButton.addEventListener("click", () => {
     refs.entryPassword.type = refs.entryPassword.type === "password" ? "text" : "password";
-    refs.togglePasswordButton.textContent = refs.entryPassword.type === "password" ? "Show" : "Hide";
+    refs.togglePasswordButton.textContent = refs.entryPassword.type === "password" ? "👁️" : "🙈";
   });
 
   refs.copyPasswordButton.addEventListener("click", async () => {
@@ -174,18 +172,8 @@ function bindEvents() {
   refs.generatePasswordButton.addEventListener("click", () => {
     refs.entryPassword.value = generatePassword();
     refs.entryPassword.type = "text";
-    refs.togglePasswordButton.textContent = "Hide";
+    refs.togglePasswordButton.textContent = "🙈";
     showToast("Strong password generated.");
-  });
-
-  refs.installButton.addEventListener("click", async () => {
-    if (!state.installPrompt) {
-      return;
-    }
-    state.installPrompt.prompt();
-    await state.installPrompt.userChoice;
-    state.installPrompt = null;
-    refs.installButton.hidden = true;
   });
 }
 
@@ -203,12 +191,12 @@ function setActiveAuthForm(form) {
 
 function showScreen(screenName) {
   document.querySelectorAll(".auth-screen").forEach((screen) => {
-    screen.classList.remove("active-screen");
+    screen.classList.remove("active-auth-screen");
   });
 
   const screen = document.querySelector(`#${screenName}`);
   if (screen) {
-    screen.classList.add("active-screen");
+    screen.classList.add("active-auth-screen");
   }
 
   if (screenName === "totp-verify-screen") {
@@ -221,10 +209,22 @@ function showScreen(screenName) {
     return;
   }
 
-  if (screenName === "legacy-screen") {
+  if (screenName === "auth-main-screen") {
     const activeTab = document.querySelector(".tab-btn.active")?.dataset.tab || "login";
     setActiveAuthForm(activeTab === "signup" ? refs.signupForm : refs.loginForm);
   }
+}
+
+// ─── Page Navigation ──────────────────────────────────────────────────────────
+
+function showAuthPage() {
+  refs.authPage.classList.add("active-page");
+  refs.vaultPage.classList.remove("active-page");
+}
+
+function showVaultPage() {
+  refs.authPage.classList.remove("active-page");
+  refs.vaultPage.classList.add("active-page");
 }
 
 // ─── TOTP Utilities ───────────────────────────────────────────────────────────
@@ -394,11 +394,9 @@ async function hydrateSession() {
     const session = await api("/session");
     state.session = session.user;
     state.encryptedVault = session.vault;
-    refs.apiStatus.textContent = "Connected";
   } catch {
     state.session = null;
     state.encryptedVault = null;
-    refs.apiStatus.textContent = "Backend ready";
   }
   render();
 }
@@ -615,16 +613,12 @@ function render() {
   const loggedIn = Boolean(state.session);
   const unlocked = Boolean(state.vault);
 
-  // Handle authentication screens
-  if (!loggedIn) {
-    refs.accountSurface.hidden = false;
-    refs.appShell.hidden = true;
-    refs.logoutButton.hidden = true;
-    refs.lockButton.hidden = true;
+  // Show auth page if not logged in or in TOTP setup mode
+  if (!loggedIn || state.totpSetupMode) {
+    showAuthPage();
 
     if (state.totpSetupMode) {
       showScreen("totp-setup-screen");
-      // Re-render QR code if secret is set but container is empty
       if (state.totpSecret && refs.qrcodeContainer.children.length === 0) {
         refs.totpSecretText.textContent = state.totpSecret;
         generateQrCode(state.totpUri);
@@ -632,43 +626,22 @@ function render() {
     } else if (state.totp2faRequired) {
       showScreen("totp-verify-screen");
     } else {
-      showScreen("legacy-screen");
+      showScreen("auth-main-screen");
     }
 
-    refs.syncStatus.textContent = state.loading ? "Working" : "Idle";
     return;
   }
 
-  // Logged in but TOTP setup mode (after signup — session exists)
-  if (state.totpSetupMode) {
-    refs.accountSurface.hidden = false;
-    refs.appShell.hidden = true;
-    refs.logoutButton.hidden = false;
-    refs.lockButton.hidden = true;
-    showScreen("totp-setup-screen");
-    if (state.totpSecret && refs.qrcodeContainer.children.length === 0) {
-      refs.totpSecretText.textContent = state.totpSecret;
-      generateQrCode(state.totpUri);
-    }
-    refs.syncStatus.textContent = state.loading ? "Working" : "Idle";
-    return;
-  }
-
-  // Handle vault access
-  refs.accountSurface.hidden = true;
-  refs.appShell.hidden = !unlocked;
-  refs.logoutButton.hidden = false;
-  refs.lockButton.hidden = !unlocked;
+  // Show vault page if logged in and not in TOTP setup
+  showVaultPage();
 
   if (!unlocked) {
-    refs.syncStatus.textContent = state.loading ? "Working" : "Locked";
     return;
   }
 
   refs.currentUser.textContent = state.session.username;
   refs.entryCount.textContent = String(state.vault.entries.length);
   refs.syncStatus.textContent = state.loading ? "Saving" : "Ready";
-  refs.vaultHeadline.textContent = `${state.session.username}'s password vault`;
   renderEntryList();
   renderEditor();
 }
@@ -676,11 +649,12 @@ function render() {
 function renderEntryList() {
   refs.entryList.innerHTML = "";
   const entries = visibleEntries();
-  refs.visibleCount.textContent = `${entries.length} visible`;
 
   if (!entries.length) {
     const empty = document.createElement("div");
-    empty.className = "empty-list";
+    empty.style.padding = "16px";
+    empty.style.textAlign = "center";
+    empty.style.color = "var(--ink-soft)";
     empty.textContent = state.search ? "No matching passwords found." : "No saved passwords yet.";
     refs.entryList.append(empty);
     return;
@@ -697,34 +671,23 @@ function renderEntryList() {
       renderEditor();
     });
 
-    const meta = document.createElement("div");
-    meta.className = "entry-meta";
-
     const title = document.createElement("h4");
     title.textContent = entry.website;
 
-    const updated = document.createElement("span");
-    updated.className = "mini-note";
-    updated.textContent = formatDate(entry.updatedAt);
-
     const summary = document.createElement("p");
-    summary.className = "entry-summary";
-    summary.textContent = entry.username || entry.notes || "Saved password entry";
+    summary.textContent = entry.username || entry.notes || "Saved password";
 
-    meta.append(title, updated);
-    button.append(meta, summary);
+    button.append(title, summary);
     refs.entryList.append(button);
   }
 }
 
 function renderEditor() {
   const entry = getSelectedEntry();
-  refs.entryForm.hidden = !entry;
+  refs.editorContent.hidden = !entry;
   refs.editorEmpty.hidden = Boolean(entry);
 
   if (!entry) {
-    refs.editorTitle.textContent = "Select or create an entry";
-    refs.editorUpdated.textContent = "No selection";
     return;
   }
 
@@ -735,7 +698,7 @@ function renderEditor() {
   refs.entryPassword.value = entry.password;
   refs.entryNotes.value = entry.notes;
   refs.entryPassword.type = "password";
-  refs.togglePasswordButton.textContent = "Show";
+  refs.togglePasswordButton.textContent = "👁️";
 }
 
 function visibleEntries() {
@@ -1065,16 +1028,8 @@ function formatDate(value) {
 }
 
 function registerInstallPrompt() {
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
-    state.installPrompt = event;
-    refs.installButton.hidden = false;
-  });
-
-  window.addEventListener("appinstalled", () => {
-    refs.installButton.hidden = true;
-    showToast("Cloud Vault was installed.");
-  });
+  // Passkeys are now the primary auth method
+  // Install prompt disabled - relies on browser's web app install
 }
 
 function registerServiceWorker() {
