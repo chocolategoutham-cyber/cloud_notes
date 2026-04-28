@@ -11,6 +11,7 @@ const state = {
   search: "",
   loading: false,
   encryptionPassword: "",
+  rememberedPassword: "",
   // TOTP state
   totp2faRequired: false,   // true when login returned totpRequired
   totpSecret: null,         // secret generated client-side during setup
