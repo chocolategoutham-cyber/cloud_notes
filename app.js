@@ -12,10 +12,12 @@ const state = {
   loading: false,
   encryptionPassword: "",
   // TOTP state
-  totp2faRequired: false,
-  totpSecret: null,
+  totp2faRequired: false,   // true when login returned totpRequired
+  totpSecret: null,         // secret generated client-side during setup
   totpUri: null,
-  totpSetupMode: false,
+  totpSetupMode: false,     // true when showing the setup screen after signup
+  // Temporary password held until TOTP verify completes
+  pendingPassword: "",
 };
 
 const refs = {
@@ -33,6 +35,7 @@ const refs = {
   signupForm: document.querySelector("#signup-form"),
   loginUsername: document.querySelector("#login-username"),
   loginPassword: document.querySelector("#login-password"),
+  passkeyLoginButton: document.querySelector("#passkey-login-button"),
   signupUsername: document.querySelector("#signup-username"),
   signupPassword: document.querySelector("#signup-password"),
   signupPasswordConfirm: document.querySelector("#signup-password-confirm"),
@@ -53,6 +56,7 @@ const refs = {
   searchInput: document.querySelector("#search-input"),
   newEntryButton: document.querySelector("#new-entry-button"),
   syncButton: document.querySelector("#sync-button"),
+  registerPasskeyButton: document.querySelector("#register-passkey-button"),
   entryList: document.querySelector("#entry-list"),
   visibleCount: document.querySelector("#visible-count"),
   editorTitle: document.querySelector("#editor-title"),
@@ -93,7 +97,7 @@ function bindEvents() {
       const tab = btn.dataset.tab;
       tabBtns.forEach((b) => b.classList.remove("active"));
       document.querySelectorAll(".auth-form").forEach((f) => f.classList.remove("active-tab"));
-      
+
       btn.classList.add("active");
       if (tab === "login") {
         refs.loginForm.classList.add("active-tab");
@@ -107,6 +111,8 @@ function bindEvents() {
     event.preventDefault();
     void login();
   });
+
+  refs.passkeyLoginButton?.addEventListener("click", () => void loginWithPasskey());
 
   refs.signupForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -149,6 +155,8 @@ function bindEvents() {
   });
   refs.deleteEntryButton.addEventListener("click", () => void deleteEntry());
 
+  refs.registerPasskeyButton?.addEventListener("click", () => void registerPasskey());
+
   refs.togglePasswordButton.addEventListener("click", () => {
     refs.entryPassword.type = refs.entryPassword.type === "password" ? "text" : "password";
     refs.togglePasswordButton.textContent = refs.entryPassword.type === "password" ? "Show" : "Hide";
@@ -181,49 +189,104 @@ function bindEvents() {
   });
 }
 
-// TOTP Management Functions
+// ─── Screen Management ────────────────────────────────────────────────────────
+
+function setActiveAuthForm(form) {
+  document.querySelectorAll(".auth-form").forEach((item) => {
+    item.classList.remove("active-tab");
+  });
+
+  if (form) {
+    form.classList.add("active-tab");
+  }
+}
+
 function showScreen(screenName) {
   document.querySelectorAll(".auth-screen").forEach((screen) => {
     screen.classList.remove("active-screen");
   });
+
   const screen = document.querySelector(`#${screenName}`);
   if (screen) {
     screen.classList.add("active-screen");
   }
+
+  if (screenName === "totp-verify-screen") {
+    setActiveAuthForm(refs.totpVerifyForm);
+    return;
+  }
+
+  if (screenName === "totp-setup-screen") {
+    setActiveAuthForm(refs.totpSetupForm);
+    return;
+  }
+
+  if (screenName === "legacy-screen") {
+    const activeTab = document.querySelector(".tab-btn.active")?.dataset.tab || "login";
+    setActiveAuthForm(activeTab === "signup" ? refs.signupForm : refs.loginForm);
+  }
 }
 
+// ─── TOTP Utilities ───────────────────────────────────────────────────────────
+
 function generateTotpSecret() {
-  const length = 32;
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const random = crypto.getRandomValues(new Uint8Array(32));
   let secret = "";
-  for (let i = 0; i < length; i++) {
-    secret += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (const byte of random) {
+    secret += chars[byte % chars.length];
   }
   return secret;
 }
 
 function generateTotpUri(secret, username, issuer = "Cloud Vault") {
-  return `otpauth://totp/${issuer}:${username}?secret=${secret}&issuer=${issuer}`;
+  const encodedIssuer = encodeURIComponent(issuer);
+  const encodedUser = encodeURIComponent(username);
+  return `otpauth://totp/${encodedIssuer}:${encodedUser}?secret=${secret}&issuer=${encodedIssuer}&algorithm=SHA1&digits=6&period=30`;
 }
 
 function generateQrCode(uri) {
   const container = refs.qrcodeContainer;
+  if (!container) return;
+
   container.innerHTML = "";
-  
-  // Use Google Charts API to generate QR code
-  const encodedUri = encodeURIComponent(uri);
-  const img = document.createElement("img");
-  img.src = `https://chart.googleapis.com/chart?chs=256x256&chld=L|0&cht=qr&chl=${encodedUri}`;
-  img.alt = "TOTP QR Code";
-  img.style.maxWidth = "100%";
-  img.style.height = "auto";
-  container.appendChild(img);
+
+  if (window.QRCode) {
+    const qrHost = document.createElement("div");
+    qrHost.className = "qrcode-render";
+    container.appendChild(qrHost);
+
+    new window.QRCode(qrHost, {
+      text: uri,
+      width: 220,
+      height: 220,
+      colorDark: "#152238",
+      colorLight: "#ffffff",
+      correctLevel: window.QRCode.CorrectLevel.M,
+    });
+
+    return;
+  }
+
+  const fallback = document.createElement("div");
+  fallback.className = "qrcode-fallback";
+
+  const note = document.createElement("p");
+  note.className = "form-note";
+  note.textContent = "QR generator failed to load. Copy the secret below into your authenticator app.";
+
+  const code = document.createElement("code");
+  code.className = "totp-uri";
+  code.textContent = uri;
+
+  fallback.append(note, code);
+  container.appendChild(fallback);
 }
 
 function copyTotpSecret() {
   const secret = state.totpSecret;
   if (!secret) return;
-  
+
   navigator.clipboard.writeText(secret).then(() => {
     const btn = refs.copySecretButton;
     const originalText = btn.textContent;
@@ -236,70 +299,83 @@ function copyTotpSecret() {
   });
 }
 
+// ─── TOTP Verify (during login) ───────────────────────────────────────────────
+
 async function verifyTotp() {
   const code = refs.totpVerifyInput.value.trim();
-  
+
   if (code.length !== 6) {
     showToast("Please enter a 6-digit code.");
     return;
   }
 
   await withLoading(async () => {
-    try {
-      const response = await api("/verify-totp", {
-        method: "POST",
-        body: JSON.stringify({ 
-          code,
-          username: state.session?.username 
-        }),
-      });
-      
-      if (response.verified) {
-        state.totp2faRequired = false;
-        refs.totpVerifyInput.value = "";
-        showToast("2FA verified successfully!");
-        showScreen("legacy-screen");
-        render();
+    const response = await api("/verify-totp", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+
+    if (response.verified) {
+      // Backend returns user + vault after successful TOTP
+      state.session = response.user;
+      state.encryptedVault = response.vault;
+      state.totp2faRequired = false;
+      refs.totpVerifyInput.value = "";
+
+      // Decrypt vault with the password saved before TOTP step
+      if (state.encryptedVault && state.pendingPassword) {
+        try {
+          state.vault = await decryptVault(state.encryptedVault, state.pendingPassword);
+          state.selectedId = state.vault.entries[0]?.id ?? null;
+        } catch {
+          showToast("Failed to decrypt vault. Password may be incorrect.");
+          state.vault = null;
+          state.selectedId = null;
+        }
       } else {
-        showToast("Invalid code. Please try again.");
+        state.vault = createEmptyVault();
+        state.selectedId = null;
       }
-    } catch (error) {
-      showToast("Error verifying code. Please try again.");
+
+      state.encryptionPassword = state.pendingPassword;
+      state.rememberedPassword = state.pendingPassword;
+      state.pendingPassword = "";
+      render();
+      showToast("2FA verified. Welcome back!");
+    } else {
+      showToast("Invalid code. Please try again.");
     }
   });
 }
 
+// ─── TOTP Setup (after signup) ────────────────────────────────────────────────
+
 async function confirmTotpSetup() {
   const code = refs.totpSetupInput.value.trim();
-  
+
   if (code.length !== 6) {
     showToast("Please enter a 6-digit code.");
     return;
   }
 
   await withLoading(async () => {
-    try {
-      const response = await api("/setup-totp", {
-        method: "POST",
-        body: JSON.stringify({ 
-          secret: state.totpSecret,
-          code,
-        }),
-      });
-      
-      if (response.success) {
-        state.totpSetupMode = false;
-        state.totpSecret = null;
-        state.totpUri = null;
-        refs.totpSetupInput.value = "";
-        showToast("2FA enabled! Your authenticator is now active.");
-        showScreen("legacy-screen");
-        render();
-      } else {
-        showToast("Invalid code. Please check and try again.");
-      }
-    } catch (error) {
-      showToast("Error setting up 2FA. Please try again.");
+    const response = await api("/setup-totp", {
+      method: "POST",
+      body: JSON.stringify({
+        secret: state.totpSecret,
+        code,
+      }),
+    });
+
+    if (response.success) {
+      state.totpSetupMode = false;
+      state.totpSecret = null;
+      state.totpUri = null;
+      refs.totpSetupInput.value = "";
+      showToast("2FA enabled! Your authenticator is now active.");
+      render();
+    } else {
+      showToast(response.error || "Invalid code. Please check and try again.");
     }
   });
 }
@@ -308,9 +384,10 @@ async function skipTotpSetup() {
   state.totpSetupMode = false;
   state.totpSecret = null;
   state.totpUri = null;
-  showScreen("legacy-screen");
   render();
 }
+
+// ─── Session ──────────────────────────────────────────────────────────────────
 
 async function hydrateSession() {
   try {
@@ -325,6 +402,8 @@ async function hydrateSession() {
   }
   render();
 }
+
+// ─── Signup ───────────────────────────────────────────────────────────────────
 
 async function signup() {
   const username = refs.signupUsername.value.trim();
@@ -351,25 +430,29 @@ async function signup() {
     });
     state.session = response.user;
     state.encryptionPassword = password;
+    state.rememberedPassword = password;
     state.vault = createEmptyVault();
     state.encryptedVault = null;
-    
-    // Offer TOTP setup
+
+    // Offer TOTP setup — generate secret client-side
     state.totpSetupMode = true;
     state.totpSecret = generateTotpSecret();
     state.totpUri = generateTotpUri(state.totpSecret, username);
-    
+
     refs.signupForm.reset();
     refs.loginForm.reset();
     refs.totpSecretText.textContent = state.totpSecret;
     generateQrCode(state.totpUri);
     refs.totpSetupInput.value = "";
-    refs.totpSetupInput.focus();
-    
-    showScreen("totp-setup-screen");
+
+    render(); // will call showScreen("totp-setup-screen")
+    // Focus after render so the element is visible
+    setTimeout(() => refs.totpSetupInput.focus(), 50);
     showToast("Account created! Set up 2FA for extra security.");
   });
 }
+
+// ─── Login ────────────────────────────────────────────────────────────────────
 
 async function login() {
   const username = refs.loginUsername.value.trim();
@@ -380,40 +463,46 @@ async function login() {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+
+    if (response.totpRequired) {
+      // Save password so we can decrypt vault after TOTP succeeds
+      state.pendingPassword = password;
+      state.totp2faRequired = true;
+      refs.loginForm.reset();
+      refs.totpVerifyInput.value = "";
+      render(); // will call showScreen("totp-verify-screen")
+      setTimeout(() => refs.totpVerifyInput.focus(), 50);
+      showToast("Enter your authenticator code.");
+      return;
+    }
+
+    // No TOTP required
     state.session = response.user;
     state.encryptedVault = response.vault;
     state.encryptionPassword = password;
+    state.rememberedPassword = password;
 
-    // Check if 2FA is required
-    if (response.totpRequired) {
-      state.totp2faRequired = true;
-      refs.totpVerifyInput.value = "";
-      refs.totpVerifyInput.focus();
-      showScreen("totp-verify-screen");
-      showToast("Enter your authenticator code.");
-    } else {
-      // Auto-unlock vault with password
-      if (state.encryptedVault) {
-        try {
-          state.vault = await decryptVault(state.encryptedVault, password);
-          state.selectedId = state.vault.entries[0]?.id ?? null;
-        } catch {
-          showToast("Failed to decrypt vault. Password may be incorrect.");
-          state.vault = null;
-          state.selectedId = null;
-        }
-      } else {
-        // Create empty vault on first login
-        state.vault = createEmptyVault();
+    if (state.encryptedVault) {
+      try {
+        state.vault = await decryptVault(state.encryptedVault, password);
+        state.selectedId = state.vault.entries[0]?.id ?? null;
+      } catch {
+        showToast("Failed to decrypt vault. Password may be incorrect.");
+        state.vault = null;
         state.selectedId = null;
       }
-
-      refs.loginForm.reset();
-      render();
-      showToast("Logged in successfully.");
+    } else {
+      state.vault = createEmptyVault();
+      state.selectedId = null;
     }
+
+    refs.loginForm.reset();
+    render();
+    showToast("Logged in successfully.");
   });
 }
+
+// ─── Logout / Lock ────────────────────────────────────────────────────────────
 
 async function logout() {
   await withLoading(async () => {
@@ -422,6 +511,7 @@ async function logout() {
     state.vault = null;
     state.encryptedVault = null;
     state.encryptionPassword = "";
+    state.pendingPassword = "";
     state.selectedId = null;
     state.search = "";
     state.totp2faRequired = false;
@@ -443,6 +533,8 @@ function lockVault(message) {
     showToast(message);
   }
 }
+
+// ─── Vault Entries ────────────────────────────────────────────────────────────
 
 function startNewEntry() {
   state.selectedId = null;
@@ -517,6 +609,8 @@ async function persistVaultToBackend(successMessage) {
   });
 }
 
+// ─── Render ───────────────────────────────────────────────────────────────────
+
 function render() {
   const loggedIn = Boolean(state.session);
   const unlocked = Boolean(state.vault);
@@ -527,14 +621,34 @@ function render() {
     refs.appShell.hidden = true;
     refs.logoutButton.hidden = true;
     refs.lockButton.hidden = true;
-    
-    // Show appropriate auth screen
+
     if (state.totpSetupMode) {
       showScreen("totp-setup-screen");
+      // Re-render QR code if secret is set but container is empty
+      if (state.totpSecret && refs.qrcodeContainer.children.length === 0) {
+        refs.totpSecretText.textContent = state.totpSecret;
+        generateQrCode(state.totpUri);
+      }
     } else if (state.totp2faRequired) {
       showScreen("totp-verify-screen");
     } else {
       showScreen("legacy-screen");
+    }
+
+    refs.syncStatus.textContent = state.loading ? "Working" : "Idle";
+    return;
+  }
+
+  // Logged in but TOTP setup mode (after signup — session exists)
+  if (state.totpSetupMode) {
+    refs.accountSurface.hidden = false;
+    refs.appShell.hidden = true;
+    refs.logoutButton.hidden = false;
+    refs.lockButton.hidden = true;
+    showScreen("totp-setup-screen");
+    if (state.totpSecret && refs.qrcodeContainer.children.length === 0) {
+      refs.totpSecretText.textContent = state.totpSecret;
+      generateQrCode(state.totpUri);
     }
     refs.syncStatus.textContent = state.loading ? "Working" : "Idle";
     return;
@@ -650,6 +764,8 @@ function createEmptyVault() {
   };
 }
 
+// ─── Vault Encryption ─────────────────────────────────────────────────────────
+
 async function encryptVault(vault, password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -691,6 +807,8 @@ async function deriveKey(password, salt) {
   );
 }
 
+// ─── Password Generator ───────────────────────────────────────────────────────
+
 function generatePassword(length = 20) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+";
   const random = new Uint32Array(length);
@@ -701,6 +819,8 @@ function generatePassword(length = 20) {
   }
   return output;
 }
+
+// ─── Base64 Helpers ───────────────────────────────────────────────────────────
 
 function encodeBase64Bytes(bytes) {
   let binary = "";
@@ -715,6 +835,8 @@ function decodeBase64Bytes(value) {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
+// ─── Loading Wrapper ──────────────────────────────────────────────────────────
+
 async function withLoading(task) {
   state.loading = true;
   render();
@@ -727,6 +849,8 @@ async function withLoading(task) {
     render();
   }
 }
+
+// ─── API Client ───────────────────────────────────────────────────────────────
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_BASE}/api${path}`, {
@@ -753,6 +877,185 @@ async function api(path, options = {}) {
 
   return response.json();
 }
+
+function bufferToBase64Url(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer || []);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlToBuffer(value) {
+  const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = `${normalized}${"=".repeat((4 - (normalized.length % 4 || 4)) % 4)}`;
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function normalizePublicKeyOptions(publicKey) {
+  const normalized = {
+    ...publicKey,
+    user: publicKey.user ? { ...publicKey.user } : undefined,
+    excludeCredentials: Array.isArray(publicKey.excludeCredentials)
+      ? publicKey.excludeCredentials.map((credential) => ({
+          ...credential,
+          id: base64UrlToBuffer(credential.id),
+        }))
+      : undefined,
+    allowCredentials: Array.isArray(publicKey.allowCredentials)
+      ? publicKey.allowCredentials.map((credential) => ({
+          ...credential,
+          id: base64UrlToBuffer(credential.id),
+        }))
+      : undefined,
+  };
+
+  normalized.challenge = base64UrlToBuffer(publicKey.challenge);
+  if (normalized.user?.id) {
+    normalized.user.id = base64UrlToBuffer(normalized.user.id);
+  }
+
+  return normalized;
+}
+
+function serializeAttestationCredential(credential) {
+  const response = credential.response;
+  const publicKey = response.getPublicKey?.();
+
+  if (!publicKey) {
+    throw new Error("This browser does not expose the passkey public key.");
+  }
+
+  return {
+    id: credential.id,
+    rawId: bufferToBase64Url(credential.rawId),
+    type: credential.type,
+    response: {
+      clientDataJSON: bufferToBase64Url(response.clientDataJSON),
+      attestationObject: bufferToBase64Url(response.attestationObject),
+      publicKey: bufferToBase64Url(publicKey),
+      publicKeyAlgorithm: response.getPublicKeyAlgorithm?.() ?? -7,
+    },
+  };
+}
+
+function serializeAssertionCredential(credential) {
+  const response = credential.response;
+
+  return {
+    id: credential.id,
+    rawId: bufferToBase64Url(credential.rawId),
+    type: credential.type,
+    response: {
+      clientDataJSON: bufferToBase64Url(response.clientDataJSON),
+      authenticatorData: bufferToBase64Url(response.authenticatorData),
+      signature: bufferToBase64Url(response.signature),
+      userHandle: response.userHandle ? bufferToBase64Url(response.userHandle) : undefined,
+    },
+  };
+}
+
+async function loginWithPasskey() {
+  if (!window.PublicKeyCredential || !navigator.credentials?.get) {
+    showToast("Passkeys are not supported in this browser.");
+    return;
+  }
+
+  const username = refs.loginUsername.value.trim();
+
+  await withLoading(async () => {
+    const options = await api("/webauthn/login/options", {
+      method: "POST",
+      body: JSON.stringify({ username }),
+    });
+
+    const credential = await navigator.credentials.get({
+      publicKey: normalizePublicKeyOptions(options.publicKey),
+    });
+
+    if (!credential) {
+      throw new Error("Passkey sign-in was cancelled.");
+    }
+
+    await api("/webauthn/login/verify", {
+      method: "POST",
+      body: JSON.stringify(serializeAssertionCredential(credential)),
+    });
+
+    await hydrateSession();
+
+    const passwordToUse =
+      state.rememberedPassword || refs.loginPassword.value || state.encryptionPassword || window.prompt("Enter your vault password to unlock your notes.");
+
+    if (!passwordToUse) {
+      showToast("Passkey verified. Enter your vault password to unlock your notes.");
+      render();
+      return;
+    }
+
+    try {
+      state.vault = await decryptVault(state.encryptedVault, passwordToUse);
+      state.encryptionPassword = passwordToUse;
+      state.rememberedPassword = passwordToUse;
+      state.selectedId = state.vault.entries[0]?.id ?? null;
+      refs.loginPassword.value = "";
+      render();
+      showToast("Logged in with passkey.");
+    } catch {
+      state.vault = null;
+      state.selectedId = null;
+      render();
+      showToast("Passkey verified, but the vault password was incorrect.");
+    }
+  });
+}
+
+async function registerPasskey() {
+  if (!state.session) {
+    showToast("Please log in first.");
+    return;
+  }
+
+  if (!window.PublicKeyCredential || !navigator.credentials?.create) {
+    showToast("Passkeys are not supported in this browser.");
+    return;
+  }
+
+  const label = window.prompt("Name this passkey", "Passkey")?.trim() || "Passkey";
+
+  await withLoading(async () => {
+    const options = await api("/webauthn/register/options", {
+      method: "POST",
+      body: JSON.stringify({ label }),
+    });
+
+    const credential = await navigator.credentials.create({
+      publicKey: normalizePublicKeyOptions(options.publicKey),
+    });
+
+    if (!credential) {
+      throw new Error("Passkey registration was cancelled.");
+    }
+
+    await api("/webauthn/register/verify", {
+      method: "POST",
+      body: JSON.stringify({
+        ...serializeAttestationCredential(credential),
+        label,
+      }),
+    });
+
+    showToast("Passkey registered successfully.");
+  });
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
 function formatDate(value) {
   return new Intl.DateTimeFormat(undefined, {

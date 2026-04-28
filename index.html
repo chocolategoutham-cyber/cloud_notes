@@ -61,9 +61,10 @@
                   Password
                   <input id="login-password" type="password" autocomplete="current-password" required />
                 </label>
-                <button class="primary-button" type="submit">Login</button>
-                <p class="form-note">You'll be asked to verify with your authenticator app if 2FA is enabled.</p>
-              </form>
+              <button class="primary-button" type="submit">Login</button>
+              <button class="secondary-button" id="passkey-login-button" type="button">Use passkey</button>
+              <p class="form-note">You'll be asked to verify with your authenticator app if 2FA is enabled.</p>
+            </form>
 
               <form id="signup-form" class="auth-form">
                 <label>
@@ -176,6 +177,7 @@
             <div class="quick-actions">
               <button class="secondary-button" id="new-entry-button" type="button">New password</button>
               <button class="ghost-button" id="sync-button" type="button">Save vault</button>
+              <button class="ghost-button" id="register-passkey-button" type="button">Add passkey</button>
             </div>
           </div>
 
@@ -271,6 +273,7 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
     <script src="./app.js" defer></script>
   </body>
 </html>
