@@ -5,8 +5,8 @@ const state = {
   toastTimeout: null,
   session: null,
   vault: null,
-  pendingPhone: "",
-  authStep: "phone",
+  pendingEmail: "",
+  authStep: "email",
   selectedId: null,
   search: "",
   isCreatingEntry: false,
@@ -15,16 +15,16 @@ const state = {
 const refs = {
   authPage: document.querySelector("#auth-page"),
   vaultPage: document.querySelector("#vault-page"),
-  phoneStep: document.querySelector("#phone-step"),
+  emailStep: document.querySelector("#email-step"),
   otpStep: document.querySelector("#otp-step"),
-  phoneForm: document.querySelector("#phone-form"),
+  emailForm: document.querySelector("#email-form"),
   otpForm: document.querySelector("#otp-form"),
-  phoneInput: document.querySelector("#phone-input"),
+  emailInput: document.querySelector("#email-input"),
   otpInput: document.querySelector("#otp-input"),
-  otpPhoneLabel: document.querySelector("#otp-phone-label"),
+  otpEmailLabel: document.querySelector("#otp-email-label"),
   devOtpHint: document.querySelector("#dev-otp-hint"),
-  changePhoneButton: document.querySelector("#change-phone-button"),
-  currentPhone: document.querySelector("#current-phone"),
+  changeEmailButton: document.querySelector("#change-email-button"),
+  currentEmail: document.querySelector("#current-email"),
   logoutButton: document.querySelector("#logout-button"),
   searchInput: document.querySelector("#search-input"),
   entryCount: document.querySelector("#entry-count"),
@@ -58,7 +58,7 @@ async function initializeApp() {
 }
 
 function bindEvents() {
-  refs.phoneForm.addEventListener("submit", (event) => {
+  refs.emailForm.addEventListener("submit", (event) => {
     event.preventDefault();
     void requestOtp();
   });
@@ -68,8 +68,8 @@ function bindEvents() {
     void verifyOtp();
   });
 
-  refs.changePhoneButton.addEventListener("click", () => {
-    state.authStep = "phone";
+  refs.changeEmailButton.addEventListener("click", () => {
+    state.authStep = "email";
     refs.otpForm.reset();
     refs.devOtpHint.hidden = true;
     render();
@@ -80,19 +80,15 @@ function bindEvents() {
   });
 
   refs.logoutButton.addEventListener("click", () => void logout());
-
   refs.searchInput.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
     renderEntryList();
   });
-
   refs.newEntryButton.addEventListener("click", () => startNewEntry());
-
   refs.entryForm.addEventListener("submit", (event) => {
     event.preventDefault();
     void saveEntry();
   });
-
   refs.saveVaultButton.addEventListener("click", () => void persistVault("Vault saved."));
   refs.deleteEntryButton.addEventListener("click", () => void deleteEntry());
 
@@ -106,7 +102,6 @@ function bindEvents() {
       showToast("No password to copy.");
       return;
     }
-
     await navigator.clipboard.writeText(refs.entryPassword.value);
     showToast("Password copied.");
   });
@@ -137,39 +132,38 @@ async function hydrateSession() {
 }
 
 async function requestOtp() {
-  const phone = normalizePhone(refs.phoneInput.value);
-  if (!phone) {
-    showToast("Enter a valid phone number.");
+  const email = normalizeEmail(refs.emailInput.value);
+  if (!email) {
+    showToast("Enter a valid email address.");
     return;
   }
 
   await withLoading(async () => {
     const response = await api("/request-otp", {
       method: "POST",
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({ email }),
     });
 
-    state.pendingPhone = phone;
+    state.pendingEmail = email;
     state.authStep = "otp";
-    refs.otpPhoneLabel.textContent = `Code sent to ${phone}`;
+    refs.otpEmailLabel.textContent = `Code sent to ${email}`;
     refs.devOtpHint.hidden = !response.devCode;
     refs.devOtpHint.textContent = response.devCode
-      ? `Dev OTP: ${response.devCode}. Cloudflare cannot send SMS by itself, so dev mode is active.`
-      : "";
-    refs.otpForm.reset();
+      ? `Dev OTP: ${response.devCode}. Configure email delivery secrets to send real messages automatically.`
+      : "OTP email sent. Check your inbox and spam folder.";
     render();
     refs.otpInput.focus();
-    showToast("OTP created.");
+    showToast(response.devCode ? "OTP created." : "OTP sent to email.");
   });
 }
 
 async function verifyOtp() {
-  const phone = state.pendingPhone || normalizePhone(refs.phoneInput.value);
+  const email = state.pendingEmail || normalizeEmail(refs.emailInput.value);
   const code = refs.otpInput.value.trim();
 
-  if (!phone) {
-    showToast("Enter your phone number first.");
-    state.authStep = "phone";
+  if (!email) {
+    showToast("Enter your email first.");
+    state.authStep = "email";
     render();
     return;
   }
@@ -182,7 +176,7 @@ async function verifyOtp() {
   await withLoading(async () => {
     const response = await api("/verify-otp", {
       method: "POST",
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ email, code }),
     });
 
     state.session = response.user;
@@ -191,7 +185,7 @@ async function verifyOtp() {
     state.isCreatingEntry = !state.vault.entries.length;
     state.search = "";
     refs.searchInput.value = "";
-    refs.phoneForm.reset();
+    refs.emailForm.reset();
     refs.otpForm.reset();
     refs.devOtpHint.hidden = true;
     render();
@@ -204,12 +198,12 @@ async function logout() {
     await api("/logout", { method: "POST" });
     state.session = null;
     state.vault = null;
-    state.pendingPhone = "";
-    state.authStep = "phone";
+    state.pendingEmail = "";
+    state.authStep = "email";
     state.selectedId = null;
     state.search = "";
     state.isCreatingEntry = false;
-    refs.phoneForm.reset();
+    refs.emailForm.reset();
     refs.otpForm.reset();
     refs.searchInput.value = "";
     render();
@@ -305,15 +299,14 @@ function render() {
 
   refs.authPage.classList.toggle("active-page", !loggedIn);
   refs.vaultPage.classList.toggle("active-page", loggedIn);
-
-  refs.phoneStep.classList.toggle("active-step", state.authStep === "phone");
+  refs.emailStep.classList.toggle("active-step", state.authStep === "email");
   refs.otpStep.classList.toggle("active-step", state.authStep === "otp");
 
   if (!loggedIn) {
     return;
   }
 
-  refs.currentPhone.textContent = state.session.phone;
+  refs.currentEmail.textContent = state.session.email;
   refs.entryCount.textContent = String(state.vault.entries.length);
   renderEntryList();
   renderEditor();
@@ -326,7 +319,7 @@ function renderEntryList() {
   if (!entries.length) {
     const empty = document.createElement("div");
     empty.className = "entry-card";
-    empty.innerHTML = "<h3>No passwords yet</h3><p>Add your first entry to this phone vault.</p>";
+    empty.innerHTML = "<h3>No passwords yet</h3><p>Add your first entry to this email vault.</p>";
     refs.entryList.append(empty);
     return;
   }
@@ -462,12 +455,12 @@ async function api(path, options = {}) {
   return response.json();
 }
 
-function normalizePhone(value) {
-  const cleaned = String(value || "").trim().replace(/[^\d+]/g, "");
-  if (!/^\+?\d{8,15}$/.test(cleaned)) {
+function normalizeEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return "";
   }
-  return cleaned.startsWith("+") ? cleaned : `+${cleaned}`;
+  return email;
 }
 
 function generatePassword(length = 20) {

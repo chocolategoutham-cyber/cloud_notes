@@ -1,3 +1,5 @@
 FRONTEND_ORIGIN="https://chocolategoutham-cyber.github.io"
 OTP_DEV_MODE="true"
 OTP_FIXED_CODE="123456"
+OTP_EMAIL_FROM="Cloud Vault <onboarding@resend.dev>"
+RESEND_API_KEY="re_replace_me"

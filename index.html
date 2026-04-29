@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Cloud Vault is a phone-number OTP password vault powered by Cloudflare."
+      content="Cloud Vault is an email OTP password vault powered by Cloudflare."
     />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#10233f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Cloud Vault" />
@@ -19,53 +19,80 @@
   </head>
   <body>
     <div id="auth-page" class="page active-page">
-      <div class="auth-page-wrapper">
-        <div class="auth-card">
-          <div class="auth-header">
-            <p class="eyebrow">Phone OTP Vault</p>
-            <h1>Cloud Vault</h1>
-            <p>Sign in with your phone number and a one-time code.</p>
+      <div class="auth-shell">
+        <section class="auth-story">
+          <p class="eyebrow">Email OTP Vault</p>
+          <h1>Passwords, without the clutter.</h1>
+          <p class="story-copy">
+            Open your vault with a one-time code sent to email, then manage every password entry in one
+            clean workspace.
+          </p>
+          <div class="story-grid">
+            <article class="story-card">
+              <h2>One-step access</h2>
+              <p>No signup screens, no master password, no extra auth layers.</p>
+            </article>
+            <article class="story-card">
+              <h2>Fast editing</h2>
+              <p>Add, update, search, and delete entries from a single responsive dashboard.</p>
+            </article>
+            <article class="story-card">
+              <h2>Cloudflare-backed</h2>
+              <p>Your session and vault stay synced through Workers and D1.</p>
+            </article>
           </div>
+        </section>
 
-          <section id="phone-step" class="auth-step active-step">
-            <form id="phone-form" class="auth-form active-form">
-              <div class="form-group">
-                <label for="phone-input">Phone Number</label>
-                <input
-                  id="phone-input"
-                  type="tel"
-                  autocomplete="tel"
-                  placeholder="+91 98765 43210"
-                  required
-                />
-              </div>
-              <button class="btn btn-primary" type="submit">Send OTP</button>
-            </form>
-          </section>
-
-          <section id="otp-step" class="auth-step">
-            <div class="otp-copy">
-              <p id="otp-phone-label">Code sent to</p>
-              <p class="form-hint">Enter the 6-digit OTP to open your vault.</p>
+        <section class="auth-panel">
+          <div class="auth-card">
+            <div class="auth-header">
+              <p class="eyebrow">Private Access</p>
+              <h2>Enter your email</h2>
+              <p>We’ll send a one-time code so you can open your vault.</p>
             </div>
-            <form id="otp-form" class="auth-form active-form">
-              <div class="form-group">
-                <label for="otp-input">OTP Code</label>
-                <input
-                  id="otp-input"
-                  type="text"
-                  inputmode="numeric"
-                  maxlength="6"
-                  placeholder="000000"
-                  required
-                />
+
+            <section id="email-step" class="auth-step active-step">
+              <form id="email-form" class="auth-form">
+                <div class="form-group">
+                  <label for="email-input">Email Address</label>
+                  <input
+                    id="email-input"
+                    type="email"
+                    autocomplete="email"
+                    placeholder="you@example.com"
+                    required
+                  />
+                </div>
+                <button class="btn btn-primary btn-block" type="submit">Send OTP</button>
+              </form>
+            </section>
+
+            <section id="otp-step" class="auth-step">
+              <div class="otp-copy">
+                <p id="otp-email-label" class="otp-target">Code sent to</p>
+                <p class="form-hint">Enter the 6-digit code from your email inbox.</p>
               </div>
-              <button class="btn btn-primary" type="submit">Verify OTP</button>
-              <button class="btn btn-secondary" id="change-phone-button" type="button">Change Phone</button>
-            </form>
-            <p id="dev-otp-hint" class="dev-hint" hidden></p>
-          </section>
-        </div>
+              <form id="otp-form" class="auth-form">
+                <div class="form-group">
+                  <label for="otp-input">OTP Code</label>
+                  <input
+                    id="otp-input"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="6"
+                    placeholder="000000"
+                    required
+                  />
+                </div>
+                <button class="btn btn-primary btn-block" type="submit">Verify OTP</button>
+                <button class="btn btn-secondary btn-block" id="change-email-button" type="button">
+                  Use another email
+                </button>
+              </form>
+              <p id="dev-otp-hint" class="dev-hint" hidden></p>
+            </section>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -73,32 +100,29 @@
       <div class="vault-page-wrapper">
         <header class="vault-header">
           <div class="header-left">
-            <p class="eyebrow">Private Vault</p>
+            <p class="eyebrow">Vault Workspace</p>
             <h1>Cloud Vault</h1>
-            <span id="current-phone" class="user-badge">+91</span>
+            <span id="current-email" class="user-badge">you@example.com</span>
           </div>
-          <div class="header-right">
+          <div class="header-actions">
+            <button class="btn btn-primary" id="new-entry-button" type="button">New Entry</button>
             <button class="btn btn-secondary" id="logout-button" type="button">Logout</button>
           </div>
         </header>
 
         <div class="vault-container">
           <aside class="vault-sidebar">
-            <div class="sidebar-top">
-              <div>
+            <div class="sidebar-section sidebar-summary">
+              <p class="eyebrow">Vault Index</p>
+              <div class="sidebar-heading-row">
                 <h2>Your Passwords</h2>
-                <p class="sidebar-caption">Saved directly in your Cloudflare vault.</p>
+                <span class="count-pill"><span id="entry-count">0</span> saved</span>
               </div>
-              <button class="btn btn-primary" id="new-entry-button" type="button">New Entry</button>
+              <p class="sidebar-caption">Search websites, usernames, and notes instantly.</p>
             </div>
 
-            <div class="search-box">
-              <input id="search-input" type="search" placeholder="Search website, username, notes..." />
-            </div>
-
-            <div class="entry-meta">
-              <span id="entry-count">0</span>
-              <span>entries</span>
+            <div class="sidebar-section search-box">
+              <input id="search-input" type="search" placeholder="Search passwords..." />
             </div>
 
             <div class="entry-list" id="entry-list"></div>
@@ -108,8 +132,9 @@
             <div class="editor-shell">
               <div class="editor-empty" id="editor-empty">
                 <div class="empty-state">
-                  <h2>Your vault is ready</h2>
-                  <p>Add a password entry or pick one from the list to start editing.</p>
+                  <p class="eyebrow">Ready</p>
+                  <h2>Pick an entry or create a new one</h2>
+                  <p>Everything stays in one simple vault tied to your email session.</p>
                 </div>
               </div>
 
@@ -123,14 +148,16 @@
                 </div>
 
                 <form id="entry-form" class="entry-form">
-                  <div class="form-group">
-                    <label for="entry-website">Website</label>
-                    <input id="entry-website" type="text" placeholder="example.com" required />
-                  </div>
+                  <div class="field-grid">
+                    <div class="form-group field-website">
+                      <label for="entry-website">Website</label>
+                      <input id="entry-website" type="text" placeholder="example.com" required />
+                    </div>
 
-                  <div class="form-group">
-                    <label for="entry-username">Username / Email</label>
-                    <input id="entry-username" type="text" autocomplete="username" />
+                    <div class="form-group field-username">
+                      <label for="entry-username">Username / Email</label>
+                      <input id="entry-username" type="text" autocomplete="username" />
+                    </div>
                   </div>
 
                   <div class="form-group">
@@ -155,8 +182,8 @@
                     <label for="entry-notes">Notes</label>
                     <textarea
                       id="entry-notes"
-                      rows="7"
-                      placeholder="Recovery details, tags, or anything you need to remember."
+                      rows="8"
+                      placeholder="Add recovery info, hints, labels, or anything useful."
                     ></textarea>
                   </div>
 

@@ -1,7 +1,7 @@
 {
   "name": "Cloud Vault",
   "short_name": "CloudVault",
-  "description": "A Cloudflare-backed encrypted password manager PWA.",
+  "description": "A Cloudflare-backed email OTP password vault PWA.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

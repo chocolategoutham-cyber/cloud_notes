@@ -15,7 +15,7 @@ export default {
       const url = new URL(request.url);
 
       if (!url.pathname.startsWith("/api/")) {
-        return json({ ok: true, service: "cloud-vault-phone-api" }, 200, env, request);
+        return json({ ok: true, service: "cloud-vault-email-api" }, 200, env, request);
       }
 
       if (url.pathname === "/api/request-otp" && request.method === "POST") {
@@ -49,9 +49,9 @@ async function ensureDatabaseSchema(env) {
   if (!schemaReadyPromise) {
     schemaReadyPromise = (async () => {
       await env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS phone_users (
+        CREATE TABLE IF NOT EXISTS email_users (
           id TEXT PRIMARY KEY,
-          phone TEXT NOT NULL UNIQUE,
+          email TEXT NOT NULL UNIQUE,
           created_at TEXT NOT NULL,
           last_login_at TEXT
         )
@@ -60,39 +60,39 @@ async function ensureDatabaseSchema(env) {
       await env.DB.prepare(`
         CREATE TABLE IF NOT EXISTS otp_codes (
           id TEXT PRIMARY KEY,
-          phone_user_id TEXT NOT NULL,
-          phone TEXT NOT NULL,
+          email_user_id TEXT NOT NULL,
+          email TEXT NOT NULL,
           code_hash TEXT NOT NULL,
           expires_at TEXT NOT NULL,
           consumed_at TEXT,
           created_at TEXT NOT NULL,
-          FOREIGN KEY (phone_user_id) REFERENCES phone_users(id) ON DELETE CASCADE
+          FOREIGN KEY (email_user_id) REFERENCES email_users(id) ON DELETE CASCADE
         )
       `).run();
 
       await env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS phone_sessions (
+        CREATE TABLE IF NOT EXISTS email_sessions (
           id TEXT PRIMARY KEY,
-          phone_user_id TEXT NOT NULL,
+          email_user_id TEXT NOT NULL,
           token_hash TEXT NOT NULL UNIQUE,
           expires_at TEXT NOT NULL,
           created_at TEXT NOT NULL,
-          FOREIGN KEY (phone_user_id) REFERENCES phone_users(id) ON DELETE CASCADE
+          FOREIGN KEY (email_user_id) REFERENCES email_users(id) ON DELETE CASCADE
         )
       `).run();
 
       await env.DB.prepare(`
         CREATE TABLE IF NOT EXISTS password_vaults (
-          phone_user_id TEXT PRIMARY KEY,
+          email_user_id TEXT PRIMARY KEY,
           vault_json TEXT NOT NULL,
           updated_at TEXT NOT NULL,
-          FOREIGN KEY (phone_user_id) REFERENCES phone_users(id) ON DELETE CASCADE
+          FOREIGN KEY (email_user_id) REFERENCES email_users(id) ON DELETE CASCADE
         )
       `).run();
 
-      await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_otp_codes_phone ON otp_codes(phone);").run();
-      await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_otp_codes_user_id ON otp_codes(phone_user_id);").run();
-      await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_phone_sessions_token_hash ON phone_sessions(token_hash);").run();
+      await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email);").run();
+      await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_otp_codes_user_id ON otp_codes(email_user_id);").run();
+      await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_email_sessions_token_hash ON email_sessions(token_hash);").run();
     })();
   }
 
@@ -101,33 +101,28 @@ async function ensureDatabaseSchema(env) {
 
 async function handleRequestOtp(request, env) {
   const body = await readJson(request);
-  const phone = normalizePhone(body.phone);
-  if (!phone) {
-    throw httpError(400, "Enter a valid phone number.");
+  const email = normalizeEmail(body.email);
+  if (!email) {
+    throw httpError(400, "Enter a valid email address.");
   }
 
-  const user = await getOrCreatePhoneUser(env, phone);
+  const user = await getOrCreateEmailUser(env, email);
   const code = selectOtpCode(env);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + OTP_TTL_MS).toISOString();
 
-  await env.DB.prepare("DELETE FROM otp_codes WHERE phone_user_id = ?").bind(user.id).run();
+  await env.DB.prepare("DELETE FROM otp_codes WHERE email_user_id = ?").bind(user.id).run();
   await env.DB.prepare(
-    "INSERT INTO otp_codes (id, phone_user_id, phone, code_hash, expires_at, consumed_at, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?)"
+    "INSERT INTO otp_codes (id, email_user_id, email, code_hash, expires_at, consumed_at, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?)"
   )
-    .bind(crypto.randomUUID(), user.id, phone, await sha256(code), expiresAt, now.toISOString())
+    .bind(crypto.randomUUID(), user.id, email, await sha256(code), expiresAt, now.toISOString())
     .run();
 
-  const payload = {
-    ok: true,
-    phone,
-    expiresAt,
-  };
+  const messageSent = await sendOtpEmail(env, email, code).catch(() => false);
+  const payload = { ok: true, email, expiresAt };
 
-  if (String(env.OTP_DEV_MODE || "true").toLowerCase() === "true") {
+  if (!messageSent) {
     payload.devCode = code;
-  } else {
-    throw httpError(501, "SMS delivery is not configured. Cloudflare alone cannot send OTP SMS.");
   }
 
   return json(payload, 200, env, request);
@@ -135,11 +130,11 @@ async function handleRequestOtp(request, env) {
 
 async function handleVerifyOtp(request, env) {
   const body = await readJson(request);
-  const phone = normalizePhone(body.phone);
+  const email = normalizeEmail(body.email);
   const code = String(body.code || "").trim();
 
-  if (!phone) {
-    throw httpError(400, "Phone number is required.");
+  if (!email) {
+    throw httpError(400, "Email is required.");
   }
 
   if (!/^\d{6}$/.test(code)) {
@@ -148,14 +143,14 @@ async function handleVerifyOtp(request, env) {
 
   const now = new Date().toISOString();
   const otp = await env.DB.prepare(
-    `SELECT otp_codes.id, otp_codes.phone_user_id, phone_users.phone
+    `SELECT otp_codes.id, otp_codes.email_user_id, email_users.email
      FROM otp_codes
-     JOIN phone_users ON phone_users.id = otp_codes.phone_user_id
-     WHERE otp_codes.phone = ? AND otp_codes.code_hash = ? AND otp_codes.consumed_at IS NULL AND otp_codes.expires_at > ?
+     JOIN email_users ON email_users.id = otp_codes.email_user_id
+     WHERE otp_codes.email = ? AND otp_codes.code_hash = ? AND otp_codes.consumed_at IS NULL AND otp_codes.expires_at > ?
      ORDER BY otp_codes.created_at DESC
      LIMIT 1`
   )
-    .bind(phone, await sha256(code), now)
+    .bind(email, await sha256(code), now)
     .first();
 
   if (!otp) {
@@ -163,14 +158,14 @@ async function handleVerifyOtp(request, env) {
   }
 
   await env.DB.prepare("UPDATE otp_codes SET consumed_at = ? WHERE id = ?").bind(now, otp.id).run();
-  await env.DB.prepare("UPDATE phone_users SET last_login_at = ? WHERE id = ?").bind(now, otp.phone_user_id).run();
+  await env.DB.prepare("UPDATE email_users SET last_login_at = ? WHERE id = ?").bind(now, otp.email_user_id).run();
 
-  const session = await createSession(env, otp.phone_user_id);
-  const vault = await loadVault(env, otp.phone_user_id);
+  const session = await createSession(env, otp.email_user_id);
+  const vault = await loadVault(env, otp.email_user_id);
 
   return json(
     {
-      user: { id: otp.phone_user_id, phone: otp.phone },
+      user: { id: otp.email_user_id, email: otp.email },
       vault,
     },
     200,
@@ -184,7 +179,7 @@ async function handleSession(request, env) {
   const user = await requireSession(request, env);
   return json(
     {
-      user: { id: user.id, phone: user.phone },
+      user: { id: user.id, email: user.email },
       vault: await loadVault(env, user.id),
     },
     200,
@@ -200,9 +195,9 @@ async function handleSaveVault(request, env) {
   const now = new Date().toISOString();
 
   await env.DB.prepare(
-    `INSERT INTO password_vaults (phone_user_id, vault_json, updated_at)
+    `INSERT INTO password_vaults (email_user_id, vault_json, updated_at)
      VALUES (?, ?, ?)
-     ON CONFLICT(phone_user_id) DO UPDATE SET vault_json = excluded.vault_json, updated_at = excluded.updated_at`
+     ON CONFLICT(email_user_id) DO UPDATE SET vault_json = excluded.vault_json, updated_at = excluded.updated_at`
   )
     .bind(user.id, JSON.stringify(vault), now)
     .run();
@@ -213,25 +208,25 @@ async function handleSaveVault(request, env) {
 async function handleLogout(request, env) {
   const token = getCookie(request.headers.get("Cookie"), SESSION_COOKIE);
   if (token) {
-    await env.DB.prepare("DELETE FROM phone_sessions WHERE token_hash = ?").bind(await sha256(token)).run();
+    await env.DB.prepare("DELETE FROM email_sessions WHERE token_hash = ?").bind(await sha256(token)).run();
   }
 
   return json({ ok: true }, 200, env, request, { "Set-Cookie": buildExpiredCookie() });
 }
 
-async function getOrCreatePhoneUser(env, phone) {
-  let user = await env.DB.prepare("SELECT id, phone FROM phone_users WHERE phone = ?").bind(phone).first();
+async function getOrCreateEmailUser(env, email) {
+  let user = await env.DB.prepare("SELECT id, email FROM email_users WHERE email = ?").bind(email).first();
   if (user) {
     return user;
   }
 
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO phone_users (id, phone, created_at, last_login_at) VALUES (?, ?, ?, NULL)")
-    .bind(id, phone, now)
+  await env.DB.prepare("INSERT INTO email_users (id, email, created_at, last_login_at) VALUES (?, ?, ?, NULL)")
+    .bind(id, email, now)
     .run();
 
-  return { id, phone };
+  return { id, email };
 }
 
 async function requireSession(request, env) {
@@ -241,10 +236,10 @@ async function requireSession(request, env) {
   }
 
   const session = await env.DB.prepare(
-    `SELECT phone_sessions.phone_user_id, phone_users.phone
-     FROM phone_sessions
-     JOIN phone_users ON phone_users.id = phone_sessions.phone_user_id
-     WHERE phone_sessions.token_hash = ? AND phone_sessions.expires_at > ?
+    `SELECT email_sessions.email_user_id, email_users.email
+     FROM email_sessions
+     JOIN email_users ON email_users.id = email_sessions.email_user_id
+     WHERE email_sessions.token_hash = ? AND email_sessions.expires_at > ?
      LIMIT 1`
   )
     .bind(await sha256(token), new Date().toISOString())
@@ -255,28 +250,28 @@ async function requireSession(request, env) {
   }
 
   return {
-    id: session.phone_user_id,
-    phone: session.phone,
+    id: session.email_user_id,
+    email: session.email,
   };
 }
 
-async function createSession(env, phoneUserId) {
+async function createSession(env, emailUserId) {
   const token = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)));
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString();
 
-  await env.DB.prepare("DELETE FROM phone_sessions WHERE phone_user_id = ?").bind(phoneUserId).run();
+  await env.DB.prepare("DELETE FROM email_sessions WHERE email_user_id = ?").bind(emailUserId).run();
   await env.DB.prepare(
-    "INSERT INTO phone_sessions (id, phone_user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO email_sessions (id, email_user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)"
   )
-    .bind(crypto.randomUUID(), phoneUserId, await sha256(token), expiresAt, now.toISOString())
+    .bind(crypto.randomUUID(), emailUserId, await sha256(token), expiresAt, now.toISOString())
     .run();
 
   return { token, expiresAt };
 }
 
-async function loadVault(env, phoneUserId) {
-  const row = await env.DB.prepare("SELECT vault_json FROM password_vaults WHERE phone_user_id = ?").bind(phoneUserId).first();
+async function loadVault(env, emailUserId) {
+  const row = await env.DB.prepare("SELECT vault_json FROM password_vaults WHERE email_user_id = ?").bind(emailUserId).first();
   return sanitizeVault(row?.vault_json ? JSON.parse(row.vault_json) : null);
 }
 
@@ -299,6 +294,30 @@ function sanitizeVault(vault) {
   };
 }
 
+async function sendOtpEmail(env, email, code) {
+  const resendApiKey = String(env.RESEND_API_KEY || "").trim();
+  const from = String(env.OTP_EMAIL_FROM || "").trim();
+  if (!resendApiKey || !from) {
+    return false;
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${resendApiKey}`,
+    },
+    body: JSON.stringify({
+      from,
+      to: [email],
+      subject: "Your Cloud Vault OTP",
+      html: `<div style="font-family:Arial,sans-serif;color:#10213c"><h1 style="margin-bottom:12px">Cloud Vault</h1><p>Your one-time code is:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes.</p></div>`,
+    }),
+  });
+
+  return response.ok;
+}
+
 function selectOtpCode(env) {
   const fixed = String(env.OTP_FIXED_CODE || "").trim();
   if (/^\d{6}$/.test(fixed)) {
@@ -309,12 +328,12 @@ function selectOtpCode(env) {
   return String(random).padStart(6, "0");
 }
 
-function normalizePhone(value) {
-  const cleaned = String(value || "").trim().replace(/[^\d+]/g, "");
-  if (!/^\+?\d{8,15}$/.test(cleaned)) {
+function normalizeEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return "";
   }
-  return cleaned.startsWith("+") ? cleaned : `+${cleaned}`;
+  return email;
 }
 
 function buildSessionCookie(token) {
