@@ -5,7 +5,7 @@ compatibility_date = "2026-04-21"
 [vars]
 FRONTEND_ORIGIN = "https://chocolategoutham-cyber.github.io"
 OTP_DEV_MODE = "true"
-OTP_EMAIL_FROM = ""
+OTP_EMAIL_FROM = "Cloud Vault <onboarding@resend.dev>"
 
 [observability]
 [observability.logs]
