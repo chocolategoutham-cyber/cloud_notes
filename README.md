@@ -1,81 +1,32 @@
 # Cloud Vault
 
-Cloud Vault is a password-manager style PWA built with:
+Cloud Vault is now a phone-number OTP password vault built with:
 
 - GitHub Pages for the frontend
 - Cloudflare Workers for the backend API
-- Cloudflare D1 for account and encrypted vault storage
+- Cloudflare D1 for phone sessions, OTP codes, and password vault data
 
 ## Product flow
 
-1. Create an account with `username + login password`
-2. Log in
-3. Create or unlock a separate master-password vault
-4. Save website, username, password, and notes entries
-5. The vault is encrypted in the browser before upload
-6. Cloudflare stores only the encrypted vault blob
+1. Enter a phone number
+2. Request an OTP
+3. Verify the OTP
+4. View, search, add, edit, delete, and save password entries
+5. Logout when finished
 
-## Architecture
+## Important note
 
-### Frontend
+Cloudflare can store OTPs and verify them, but it cannot send SMS by itself. The current app is wired in `OTP_DEV_MODE`, so the Worker returns the OTP in the API response for testing. To make this real on a phone, you still need an SMS provider later.
 
-Files:
+## Backend tables
 
-- `index.html`
-- `app.js`
-- `styles.css`
-- `sw.js`
+- `phone_users`
+- `otp_codes`
+- `phone_sessions`
+- `password_vaults`
 
-The frontend handles:
+## Deployment
 
-- login and signup UI
-- master-password vault creation and unlock
-- browser-side vault encryption and decryption
-- password generation and search
-
-### Backend
-
-Files:
-
-- `worker/src/index.js`
-- `worker/wrangler.toml`
-- `worker/schema.sql`
-- `worker/.dev.vars.example`
-
-The backend handles:
-
-- account creation
-- login / logout
-- session cookies
-- storing the encrypted vault blob in D1
-
-## D1 schema
-
-Tables:
-
-- `users`
-- `sessions`
-- `vaults`
-
-Each user has one encrypted vault row in `vaults`.
-
-## Security model
-
-- login password is hashed server-side
-- session is managed by secure HTTP-only cookie
-- vault is encrypted in the browser with the master password
-- backend stores encrypted vault JSON only
-- plaintext passwords are not intended to persist outside the active browser session
-
-## Cloudflare setup
-
-1. Create a D1 database.
-2. Put the real D1 database ID into `worker/wrangler.toml`.
-3. Apply `worker/schema.sql`.
-4. Set Worker variables/secrets from `worker/.dev.vars.example`.
-5. Deploy the Worker.
-6. Replace `API_BASE` in `app.js` with your real Worker URL.
-
-## Frontend deployment
-
-The GitHub Pages workflow in `.github/workflows/deploy-pages.yml` still deploys the static frontend.
+1. Apply `worker/schema.sql` to the D1 database.
+2. Deploy the Worker.
+3. GitHub Pages continues to deploy the frontend from `.github/workflows/deploy-pages.yml`.

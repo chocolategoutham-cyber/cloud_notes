@@ -1,4 +1,4 @@
-const CACHE_NAME = "cloud-notes-v1";
+const CACHE_NAME = "cloud-notes-v2";
 const ASSETS = [
   "./",
   "./index.html",

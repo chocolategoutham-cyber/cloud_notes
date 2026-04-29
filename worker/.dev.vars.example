@@ -1,2 +1,3 @@
 FRONTEND_ORIGIN="https://chocolategoutham-cyber.github.io"
-SESSION_SECRET="replace_with_a_long_random_string"
+OTP_DEV_MODE="true"
+OTP_FIXED_CODE="123456"

@@ -4,6 +4,7 @@ compatibility_date = "2026-04-21"
 
 [vars]
 FRONTEND_ORIGIN = "https://chocolategoutham-cyber.github.io"
+OTP_DEV_MODE = "true"
 
 [observability]
 [observability.logs]

@@ -3,8 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Cloud Notes is now a Cloudflare-backed encrypted password manager PWA." />
-    <meta name="theme-color" content="#3b82f6" />
+    <meta
+      name="description"
+      content="Cloud Vault is a phone-number OTP password vault powered by Cloudflare."
+    />
+    <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Cloud Vault" />
@@ -15,244 +18,162 @@
     <title>Cloud Vault</title>
   </head>
   <body>
-    <!-- PAGE 1: LOGIN/SIGNUP/2FA -->
     <div id="auth-page" class="page active-page">
       <div class="auth-page-wrapper">
-        <!-- Auth Screens -->
-        <div id="auth-screens-container">
-          <!-- Login/Signup Tabs -->
-          <div id="auth-main-screen" class="auth-screen active-auth-screen">
-            <div class="auth-card">
-              <div class="auth-header">
-                <h1>Cloud Vault</h1>
-                <p>Secure password manager</p>
-              </div>
-
-              <div class="auth-tabs">
-                <button class="tab-btn active" data-tab="login">Login</button>
-                <button class="tab-btn" data-tab="signup">Sign Up</button>
-              </div>
-
-              <!-- Login Form -->
-              <form id="login-form" class="auth-form active-tab">
-                <div class="form-group">
-                  <label for="login-username">Username</label>
-                  <input id="login-username" type="text" autocomplete="username" required />
-                </div>
-                <div class="form-group">
-                  <label for="login-password">Password</label>
-                  <input id="login-password" type="password" autocomplete="current-password" required />
-                </div>
-                <button class="btn btn-primary" type="submit">Login</button>
-                <button class="btn btn-secondary" id="passkey-login-button" type="button">Use Passkey</button>
-                <p class="form-hint">2FA required if enabled on your account</p>
-              </form>
-
-              <!-- Signup Form -->
-              <form id="signup-form" class="auth-form">
-                <div class="form-group">
-                  <label for="signup-username">Username</label>
-                  <input id="signup-username" type="text" autocomplete="username" minlength="3" required />
-                </div>
-                <div class="form-group">
-                  <label for="signup-password">Password</label>
-                  <input id="signup-password" type="password" autocomplete="new-password" minlength="10" required />
-                </div>
-                <div class="form-group">
-                  <label for="signup-password-confirm">Confirm Password</label>
-                  <input id="signup-password-confirm" type="password" autocomplete="new-password" minlength="10" required />
-                </div>
-                <button class="btn btn-primary" type="submit">Create Account</button>
-                <p class="form-hint">Set up 2FA on your next login</p>
-              </form>
-            </div>
+        <div class="auth-card">
+          <div class="auth-header">
+            <p class="eyebrow">Phone OTP Vault</p>
+            <h1>Cloud Vault</h1>
+            <p>Sign in with your phone number and a one-time code.</p>
           </div>
 
-          <!-- TOTP Verification Screen (During Login) -->
-          <div id="totp-verify-screen" class="auth-screen">
-            <div class="auth-card">
-              <div class="auth-header">
-                <h1>2FA Verification</h1>
-                <p>Enter the code from your authenticator app</p>
+          <section id="phone-step" class="auth-step active-step">
+            <form id="phone-form" class="auth-form active-form">
+              <div class="form-group">
+                <label for="phone-input">Phone Number</label>
+                <input
+                  id="phone-input"
+                  type="tel"
+                  autocomplete="tel"
+                  placeholder="+91 98765 43210"
+                  required
+                />
               </div>
-              <form id="totp-verify-form" class="auth-form">
-                <div class="form-group">
-                  <label for="totp-verify-input">6-Digit Code</label>
-                  <input 
-                    id="totp-verify-input" 
-                    type="text" 
-                    inputmode="numeric"
-                    maxlength="6"
-                    placeholder="000000"
-                    required 
-                  />
-                </div>
-                <button class="btn btn-primary" type="submit">Verify</button>
-                <p class="form-hint">Code expires every 60 seconds</p>
-              </form>
-            </div>
-          </div>
+              <button class="btn btn-primary" type="submit">Send OTP</button>
+            </form>
+          </section>
 
-          <!-- TOTP Setup Screen (After Signup) -->
-          <div id="totp-setup-screen" class="auth-screen">
-            <div class="auth-card">
-              <div class="auth-header">
-                <h1>Enable 2FA</h1>
-                <p>Scan with your authenticator app</p>
-              </div>
-              <div class="totp-setup-box">
-                <div id="qrcode-container" class="qr-code"></div>
-                <div class="or-divider">or</div>
-                <div class="secret-box">
-                  <code id="totp-secret-text">Loading...</code>
-                  <button type="button" class="btn btn-sm" id="copy-secret-button">Copy</button>
-                </div>
-              </div>
-              <form id="totp-setup-form" class="auth-form">
-                <div class="form-group">
-                  <label for="totp-setup-input">Enter 6-Digit Code</label>
-                  <input 
-                    id="totp-setup-input" 
-                    type="text" 
-                    inputmode="numeric"
-                    maxlength="6"
-                    placeholder="000000"
-                    required 
-                  />
-                </div>
-                <button class="btn btn-primary" type="submit">Enable 2FA</button>
-                <button type="button" class="btn btn-secondary" id="skip-totp-button">Skip for Now</button>
-              </form>
+          <section id="otp-step" class="auth-step">
+            <div class="otp-copy">
+              <p id="otp-phone-label">Code sent to</p>
+              <p class="form-hint">Enter the 6-digit OTP to open your vault.</p>
             </div>
-          </div>
+            <form id="otp-form" class="auth-form active-form">
+              <div class="form-group">
+                <label for="otp-input">OTP Code</label>
+                <input
+                  id="otp-input"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="6"
+                  placeholder="000000"
+                  required
+                />
+              </div>
+              <button class="btn btn-primary" type="submit">Verify OTP</button>
+              <button class="btn btn-secondary" id="change-phone-button" type="button">Change Phone</button>
+            </form>
+            <p id="dev-otp-hint" class="dev-hint" hidden></p>
+          </section>
         </div>
       </div>
     </div>
 
-    <!-- PAGE 2: VAULT/NOTES -->
     <div id="vault-page" class="page">
       <div class="vault-page-wrapper">
-        <!-- Header -->
         <header class="vault-header">
           <div class="header-left">
+            <p class="eyebrow">Private Vault</p>
             <h1>Cloud Vault</h1>
-            <span id="current-user" class="user-badge">User</span>
+            <span id="current-phone" class="user-badge">+91</span>
           </div>
           <div class="header-right">
-            <button class="btn btn-icon" id="lock-button" title="Lock vault" aria-label="Lock vault">
-              <span>Lock</span>
-            </button>
-            <button class="btn btn-icon" id="logout-button" title="Logout" aria-label="Logout">
-              <span>Out</span>
-            </button>
+            <button class="btn btn-secondary" id="logout-button" type="button">Logout</button>
           </div>
         </header>
 
-        <!-- Main Content -->
         <div class="vault-container">
-          <!-- Left Panel: Entry List -->
           <aside class="vault-sidebar">
             <div class="sidebar-top">
-              <h2>Your Passwords</h2>
-              <div class="sidebar-stats">
-                <span id="entry-count">0</span> entries
+              <div>
+                <h2>Your Passwords</h2>
+                <p class="sidebar-caption">Saved directly in your Cloudflare vault.</p>
               </div>
+              <button class="btn btn-primary" id="new-entry-button" type="button">New Entry</button>
             </div>
 
             <div class="search-box">
-              <input id="search-input" type="search" placeholder="Search..." />
+              <input id="search-input" type="search" placeholder="Search website, username, notes..." />
+            </div>
+
+            <div class="entry-meta">
+              <span id="entry-count">0</span>
+              <span>entries</span>
             </div>
 
             <div class="entry-list" id="entry-list"></div>
           </aside>
 
-          <!-- Right Panel: Entry Editor -->
           <main class="vault-editor">
-            <section class="unlock-state" id="unlock-state" hidden>
-              <div class="unlock-card">
-                <p class="unlock-eyebrow">Vault locked</p>
-                <h2>Unlock your passwords</h2>
-                <p class="unlock-copy">Enter your vault password to view, search, and edit your saved entries.</p>
-                <form id="unlock-form" class="unlock-form">
-                  <div class="form-group">
-                    <label for="unlock-password">Vault Password</label>
-                    <input id="unlock-password" type="password" autocomplete="current-password" required />
+            <div class="editor-shell">
+              <div class="editor-empty" id="editor-empty">
+                <div class="empty-state">
+                  <h2>Your vault is ready</h2>
+                  <p>Add a password entry or pick one from the list to start editing.</p>
+                </div>
+              </div>
+
+              <div class="editor-content" id="editor-content" hidden>
+                <div class="editor-header">
+                  <div>
+                    <p class="eyebrow">Password Entry</p>
+                    <h2 id="editor-title">New Entry</h2>
                   </div>
-                  <button class="btn btn-primary" type="submit">Unlock Vault</button>
-                </form>
-              </div>
-            </section>
-
-            <!-- Empty State -->
-            <div class="editor-empty" id="editor-empty">
-              <div class="empty-state">
-                <p>Welcome to Cloud Vault</p>
-                <p>Create a new password entry or choose one from the list.</p>
-              </div>
-            </div>
-
-            <!-- Editor Form -->
-            <div class="editor-content" id="editor-content" hidden>
-              <div class="editor-header">
-                <h2 id="editor-title">New Entry</h2>
-                <span id="editor-updated" class="editor-date">Just now</span>
-              </div>
-
-              <form id="entry-form" class="entry-form">
-                <div class="form-group">
-                  <label for="entry-website">Website</label>
-                  <input id="entry-website" type="text" placeholder="example.com" required />
+                  <span id="editor-updated" class="editor-date">Unsaved</span>
                 </div>
 
-                <div class="form-group">
-                  <label for="entry-username">Username / Email</label>
-                  <input id="entry-username" type="text" autocomplete="username" />
-                </div>
+                <form id="entry-form" class="entry-form">
+                  <div class="form-group">
+                    <label for="entry-website">Website</label>
+                    <input id="entry-website" type="text" placeholder="example.com" required />
+                  </div>
 
-                <div class="form-group">
-                  <label for="entry-password">Password</label>
-                  <div class="password-input-group">
-                    <input id="entry-password" type="password" autocomplete="new-password" />
-                    <div class="password-actions">
-                      <button type="button" class="btn btn-sm" id="toggle-password-button">Show</button>
-                      <button type="button" class="btn btn-sm" id="copy-password-button">Copy</button>
-                      <button type="button" class="btn btn-sm" id="generate-password-button">Generate</button>
+                  <div class="form-group">
+                    <label for="entry-username">Username / Email</label>
+                    <input id="entry-username" type="text" autocomplete="username" />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="entry-password">Password</label>
+                    <div class="password-input-group">
+                      <input id="entry-password" type="password" autocomplete="off" />
+                      <div class="password-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="toggle-password-button">
+                          Show
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="copy-password-button">
+                          Copy
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="generate-password-button">
+                          Generate
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div class="form-group">
-                  <label for="entry-notes">Notes</label>
-                  <textarea id="entry-notes" rows="6" placeholder="Security questions, recovery codes, etc..."></textarea>
-                </div>
+                  <div class="form-group">
+                    <label for="entry-notes">Notes</label>
+                    <textarea
+                      id="entry-notes"
+                      rows="7"
+                      placeholder="Recovery details, tags, or anything you need to remember."
+                    ></textarea>
+                  </div>
 
-                <div class="editor-actions">
-                  <button class="btn btn-primary" type="submit">Save</button>
-                  <button type="button" class="btn btn-danger" id="delete-entry-button">Delete</button>
-                </div>
-              </form>
+                  <div class="editor-actions">
+                    <button class="btn btn-primary" type="submit">Save Entry</button>
+                    <button type="button" class="btn btn-secondary" id="save-vault-button">Save Vault</button>
+                    <button type="button" class="btn btn-danger" id="delete-entry-button">Delete</button>
+                  </div>
+                </form>
+              </div>
             </div>
           </main>
         </div>
-
-        <!-- Floating Action Button for Mobile -->
-        <button class="fab" id="new-entry-button" title="New password">
-          <span>+</span>
-        </button>
-
-        <!-- Bottom Bar with Actions -->
-        <div class="bottom-bar">
-          <button class="btn btn-small" id="sync-button">Save Vault</button>
-          <button class="btn btn-small" id="register-passkey-button">Add Passkey</button>
-          <span id="sync-status" class="sync-indicator">Ready</span>
-        </div>
       </div>
     </div>
-    <!-- Toast Notifications -->
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <!-- Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="./app.js" defer></script>
   </body>
 </html>
