@@ -10,6 +10,7 @@ const state = {
   selectedId: null,
   search: "",
   isCreatingEntry: false,
+  sessionToken: "",
 };
 
 const refs = {
@@ -42,7 +43,6 @@ const refs = {
   togglePasswordButton: document.querySelector("#toggle-password-button"),
   copyPasswordButton: document.querySelector("#copy-password-button"),
   generatePasswordButton: document.querySelector("#generate-password-button"),
-  saveVaultButton: document.querySelector("#save-vault-button"),
   deleteEntryButton: document.querySelector("#delete-entry-button"),
   toast: document.querySelector("#toast"),
 };
@@ -89,7 +89,6 @@ function bindEvents() {
     event.preventDefault();
     void saveEntry();
   });
-  refs.saveVaultButton.addEventListener("click", () => void persistVault("Vault saved."));
   refs.deleteEntryButton.addEventListener("click", () => void deleteEntry());
 
   refs.togglePasswordButton.addEventListener("click", () => {
@@ -115,6 +114,16 @@ function bindEvents() {
 }
 
 async function hydrateSession() {
+  state.sessionToken = getStoredSessionToken();
+  if (!state.sessionToken) {
+    state.session = null;
+    state.vault = null;
+    state.selectedId = null;
+    state.isCreatingEntry = false;
+    render();
+    return;
+  }
+
   try {
     const response = await api("/session");
     state.session = response.user;
@@ -122,6 +131,8 @@ async function hydrateSession() {
     state.selectedId = state.vault.entries[0]?.id ?? null;
     state.isCreatingEntry = !state.vault.entries.length;
   } catch {
+    clearStoredSessionToken();
+    state.sessionToken = "";
     state.session = null;
     state.vault = null;
     state.selectedId = null;
@@ -179,6 +190,8 @@ async function verifyOtp() {
       body: JSON.stringify({ email, code }),
     });
 
+    state.sessionToken = response.sessionToken || "";
+    storeSessionToken(state.sessionToken);
     state.session = response.user;
     state.vault = sanitizeVault(response.vault);
     state.selectedId = state.vault.entries[0]?.id ?? null;
@@ -196,6 +209,8 @@ async function verifyOtp() {
 async function logout() {
   await withLoading(async () => {
     await api("/logout", { method: "POST" });
+    clearStoredSessionToken();
+    state.sessionToken = "";
     state.session = null;
     state.vault = null;
     state.pendingEmail = "";
@@ -281,7 +296,7 @@ async function deleteEntry() {
 }
 
 async function persistVault(successMessage) {
-  if (!state.session || !state.vault) {
+  if (!state.session || !state.vault || !state.sessionToken) {
     return;
   }
 
@@ -434,6 +449,7 @@ async function api(path, options = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(state.sessionToken ? { Authorization: `Bearer ${state.sessionToken}` } : {}),
       ...(options.headers || {}),
     },
     credentials: "include",
@@ -448,6 +464,10 @@ async function api(path, options = {}) {
       }
     } catch {
       // Ignore parse failures.
+    }
+    if (response.status === 401 || response.status === 403) {
+      clearStoredSessionToken();
+      state.sessionToken = "";
     }
     throw new Error(message);
   }
@@ -484,6 +504,32 @@ function formatDate(value) {
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => undefined);
+  }
+}
+
+function getStoredSessionToken() {
+  try {
+    return localStorage.getItem("cloud_vault_session_token") || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeSessionToken(token) {
+  try {
+    if (token) {
+      localStorage.setItem("cloud_vault_session_token", token);
+    }
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clearStoredSessionToken() {
+  try {
+    localStorage.removeItem("cloud_vault_session_token");
+  } catch {
+    // Ignore storage failures.
   }
 }
 

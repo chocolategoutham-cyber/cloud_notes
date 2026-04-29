@@ -167,6 +167,7 @@ async function handleVerifyOtp(request, env) {
     {
       user: { id: otp.email_user_id, email: otp.email },
       vault,
+      sessionToken: session.token,
     },
     200,
     env,
@@ -206,7 +207,7 @@ async function handleSaveVault(request, env) {
 }
 
 async function handleLogout(request, env) {
-  const token = getCookie(request.headers.get("Cookie"), SESSION_COOKIE);
+  const token = getSessionToken(request);
   if (token) {
     await env.DB.prepare("DELETE FROM email_sessions WHERE token_hash = ?").bind(await sha256(token)).run();
   }
@@ -230,7 +231,7 @@ async function getOrCreateEmailUser(env, email) {
 }
 
 async function requireSession(request, env) {
-  const token = getCookie(request.headers.get("Cookie"), SESSION_COOKIE);
+  const token = getSessionToken(request);
   if (!token) {
     throw httpError(401, "Not logged in.");
   }
@@ -253,6 +254,14 @@ async function requireSession(request, env) {
     id: session.email_user_id,
     email: session.email,
   };
+}
+
+function getSessionToken(request) {
+  const authHeader = request.headers.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice("Bearer ".length).trim();
+  }
+  return getCookie(request.headers.get("Cookie"), SESSION_COOKIE);
 }
 
 async function createSession(env, emailUserId) {
