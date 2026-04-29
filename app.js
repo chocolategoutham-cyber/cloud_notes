@@ -12,6 +12,7 @@ const state = {
   loading: false,
   encryptionPassword: "",
   rememberedPassword: "",
+  isCreatingEntry: false,
   // TOTP state
   totp2faRequired: false,   // true when login returned totpRequired
   totpSecret: null,         // secret generated client-side during setup
@@ -61,6 +62,9 @@ const refs = {
   registerPasskeyButton: document.querySelector("#register-passkey-button"),
   syncStatus: document.querySelector("#sync-status"),
   // Vault editor
+  unlockState: document.querySelector("#unlock-state"),
+  unlockForm: document.querySelector("#unlock-form"),
+  unlockPassword: document.querySelector("#unlock-password"),
   editorEmpty: document.querySelector("#editor-empty"),
   editorContent: document.querySelector("#editor-content"),
   editorTitle: document.querySelector("#editor-title"),
@@ -130,6 +134,10 @@ function bindEvents() {
 
   refs.skipTotpButton.addEventListener("click", () => void skipTotpSetup());
   refs.copySecretButton.addEventListener("click", () => copyTotpSecret());
+  refs.unlockForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void unlockVault();
+  });
 
   // Auto-format TOTP inputs (only accept numbers)
   [refs.totpVerifyInput, refs.totpSetupInput].forEach((input) => {
@@ -158,7 +166,7 @@ function bindEvents() {
 
   refs.togglePasswordButton.addEventListener("click", () => {
     refs.entryPassword.type = refs.entryPassword.type === "password" ? "text" : "password";
-    refs.togglePasswordButton.textContent = refs.entryPassword.type === "password" ? "👁️" : "🙈";
+    refs.togglePasswordButton.textContent = refs.entryPassword.type === "password" ? "Show" : "Hide";
   });
 
   refs.copyPasswordButton.addEventListener("click", async () => {
@@ -173,7 +181,7 @@ function bindEvents() {
   refs.generatePasswordButton.addEventListener("click", () => {
     refs.entryPassword.value = generatePassword();
     refs.entryPassword.type = "text";
-    refs.togglePasswordButton.textContent = "🙈";
+    refs.togglePasswordButton.textContent = "Hide";
     showToast("Strong password generated.");
   });
 }
@@ -328,14 +336,17 @@ async function verifyTotp() {
         try {
           state.vault = await decryptVault(state.encryptedVault, state.pendingPassword);
           state.selectedId = state.vault.entries[0]?.id ?? null;
+          state.isCreatingEntry = !state.vault.entries.length;
         } catch {
           showToast("Failed to decrypt vault. Password may be incorrect.");
           state.vault = null;
           state.selectedId = null;
+          state.isCreatingEntry = false;
         }
       } else {
         state.vault = createEmptyVault();
         state.selectedId = null;
+        state.isCreatingEntry = true;
       }
 
       state.encryptionPassword = state.pendingPassword;
@@ -432,6 +443,7 @@ async function signup() {
     state.rememberedPassword = password;
     state.vault = createEmptyVault();
     state.encryptedVault = null;
+    state.isCreatingEntry = true;
 
     // Offer TOTP setup — generate secret client-side
     state.totpSetupMode = true;
@@ -485,14 +497,17 @@ async function login() {
       try {
         state.vault = await decryptVault(state.encryptedVault, password);
         state.selectedId = state.vault.entries[0]?.id ?? null;
+        state.isCreatingEntry = false;
       } catch {
         showToast("Failed to decrypt vault. Password may be incorrect.");
         state.vault = null;
         state.selectedId = null;
+        state.isCreatingEntry = false;
       }
     } else {
       state.vault = createEmptyVault();
       state.selectedId = null;
+      state.isCreatingEntry = true;
     }
 
     refs.loginForm.reset();
@@ -513,6 +528,7 @@ async function logout() {
     state.pendingPassword = "";
     state.selectedId = null;
     state.search = "";
+    state.isCreatingEntry = false;
     state.totp2faRequired = false;
     state.totpSecret = null;
     state.totpUri = null;
@@ -527,23 +543,55 @@ function lockVault(message) {
   state.vault = null;
   state.encryptionPassword = "";
   state.selectedId = null;
+  state.isCreatingEntry = false;
+  refs.unlockForm.reset();
   render();
   if (message) {
     showToast(message);
   }
 }
 
+async function unlockVault() {
+  if (!state.session) {
+    return;
+  }
+
+  const password = refs.unlockPassword.value || state.rememberedPassword;
+  if (!password) {
+    showToast("Enter your vault password to unlock.");
+    return;
+  }
+
+  await withLoading(async () => {
+    state.vault = state.encryptedVault ? await decryptVault(state.encryptedVault, password) : createEmptyVault();
+    state.encryptionPassword = password;
+    state.rememberedPassword = password;
+    state.selectedId = state.vault.entries[0]?.id ?? null;
+    state.isCreatingEntry = !state.vault.entries.length;
+    refs.unlockForm.reset();
+    render();
+    showToast("Vault unlocked.");
+  });
+}
+
 // ─── Vault Entries ────────────────────────────────────────────────────────────
 
 function startNewEntry() {
+  if (!state.vault) {
+    showToast("Unlock the vault first.");
+    return;
+  }
+
+  state.isCreatingEntry = true;
   state.selectedId = null;
-  refs.entryForm.hidden = false;
-  refs.editorEmpty.hidden = true;
   refs.editorTitle.textContent = "New password entry";
   refs.editorUpdated.textContent = "Unsaved";
   refs.entryForm.reset();
   refs.entryPassword.type = "password";
   refs.togglePasswordButton.textContent = "Show";
+  refs.deleteEntryButton.hidden = true;
+  renderEditor();
+  refs.entryWebsite.focus();
 }
 
 async function saveEntry() {
@@ -572,6 +620,7 @@ async function saveEntry() {
 
   state.vault.entries.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
   state.selectedId = entry.id;
+  state.isCreatingEntry = false;
   await persistVaultToBackend("Vault saved.");
   render();
 }
@@ -587,6 +636,7 @@ async function deleteEntry() {
   }
   state.vault.entries = state.vault.entries.filter((item) => item.id !== entry.id);
   state.selectedId = state.vault.entries[0]?.id ?? null;
+  state.isCreatingEntry = false;
   await persistVaultToBackend("Entry deleted.");
   render();
 }
@@ -635,12 +685,22 @@ function render() {
 
   // Show vault page if logged in and not in TOTP setup
   showVaultPage();
+  refs.currentUser.textContent = state.session.username;
+  refs.searchInput.disabled = !unlocked;
+  refs.syncButton.disabled = !unlocked;
+  refs.newEntryButton.disabled = !unlocked;
 
   if (!unlocked) {
+    refs.entryCount.textContent = "0";
+    refs.syncStatus.textContent = state.loading ? "Unlocking" : "Locked";
+    refs.entryList.innerHTML = "";
+    refs.unlockState.hidden = false;
+    refs.editorEmpty.hidden = true;
+    refs.editorContent.hidden = true;
     return;
   }
 
-  refs.currentUser.textContent = state.session.username;
+  refs.unlockState.hidden = true;
   refs.entryCount.textContent = String(state.vault.entries.length);
   refs.syncStatus.textContent = state.loading ? "Saving" : "Ready";
   renderEntryList();
@@ -667,6 +727,7 @@ function renderEntryList() {
     button.className = "entry-card";
     button.classList.toggle("is-selected", entry.id === state.selectedId);
     button.addEventListener("click", () => {
+      state.isCreatingEntry = false;
       state.selectedId = entry.id;
       renderEntryList();
       renderEditor();
@@ -685,8 +746,18 @@ function renderEntryList() {
 
 function renderEditor() {
   const entry = getSelectedEntry();
-  refs.editorContent.hidden = !entry;
-  refs.editorEmpty.hidden = Boolean(entry);
+  const showingComposer = state.isCreatingEntry;
+  refs.editorContent.hidden = !entry && !showingComposer;
+  refs.editorEmpty.hidden = Boolean(entry || showingComposer) || !state.vault;
+
+  if (showingComposer) {
+    refs.editorTitle.textContent = "New password entry";
+    refs.editorUpdated.textContent = "Unsaved";
+    refs.deleteEntryButton.hidden = true;
+    refs.entryPassword.type = "password";
+    refs.togglePasswordButton.textContent = "Show";
+    return;
+  }
 
   if (!entry) {
     return;
@@ -699,7 +770,8 @@ function renderEditor() {
   refs.entryPassword.value = entry.password;
   refs.entryNotes.value = entry.notes;
   refs.entryPassword.type = "password";
-  refs.togglePasswordButton.textContent = "👁️";
+  refs.togglePasswordButton.textContent = "Show";
+  refs.deleteEntryButton.hidden = false;
 }
 
 function visibleEntries() {
@@ -955,10 +1027,10 @@ async function loginWithPasskey() {
     await hydrateSession();
 
     const passwordToUse =
-      state.rememberedPassword || refs.loginPassword.value || state.encryptionPassword || window.prompt("Enter your vault password to unlock your notes.");
+      state.rememberedPassword || refs.loginPassword.value || state.encryptionPassword || window.prompt("Enter your vault password to unlock your passwords.");
 
     if (!passwordToUse) {
-      showToast("Passkey verified. Enter your vault password to unlock your notes.");
+      showToast("Passkey verified. Enter your vault password to unlock your passwords.");
       render();
       return;
     }
@@ -968,12 +1040,14 @@ async function loginWithPasskey() {
       state.encryptionPassword = passwordToUse;
       state.rememberedPassword = passwordToUse;
       state.selectedId = state.vault.entries[0]?.id ?? null;
+      state.isCreatingEntry = !state.vault.entries.length;
       refs.loginPassword.value = "";
       render();
       showToast("Logged in with passkey.");
     } catch {
       state.vault = null;
       state.selectedId = null;
+      state.isCreatingEntry = false;
       render();
       showToast("Passkey verified, but the vault password was incorrect.");
     }

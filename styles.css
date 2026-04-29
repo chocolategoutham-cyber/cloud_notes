@@ -155,6 +155,19 @@ textarea { resize: vertical; }
   font-size: 0.85rem;
 }
 
+.btn-small {
+  min-height: 40px;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--ink);
+}
+
+.btn-small:hover {
+  background: var(--surface-hover);
+  border-color: #cbd5e1;
+}
+
 /* Page Layout */
 .page { display: none; }
 .page.active-page { display: flex; flex-direction: column; min-height: 100vh; }
@@ -429,6 +442,49 @@ textarea { resize: vertical; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(147, 197, 253, 0.2), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(248, 250, 252, 0.96));
+}
+
+.unlock-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.unlock-card {
+  width: min(100%, 480px);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 24px;
+  box-shadow: var(--shadow-lg);
+  padding: 28px;
+}
+
+.unlock-eyebrow {
+  color: var(--accent-dark);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.unlock-card h2 {
+  margin-top: 10px;
+}
+
+.unlock-copy {
+  margin-top: 10px;
+  color: var(--ink-soft);
+}
+
+.unlock-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
 }
 
 .editor-empty {
@@ -441,6 +497,7 @@ textarea { resize: vertical; }
 }
 .empty-state {
   color: var(--ink-soft);
+  max-width: 360px;
 }
 .empty-state p {
   font-size: 1.1rem;
@@ -453,6 +510,8 @@ textarea { resize: vertical; }
   flex-direction: column;
   overflow-y: auto;
   padding: 24px;
+  max-width: 880px;
+  width: 100%;
 }
 
 .editor-header {
@@ -490,6 +549,7 @@ textarea { resize: vertical; }
 .password-actions {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .editor-actions {
@@ -610,6 +670,13 @@ textarea { resize: vertical; }
   .editor-content {
     padding: 16px;
   }
+  .unlock-state {
+    padding: 20px 16px;
+  }
+  .unlock-card {
+    padding: 22px 18px;
+    border-radius: 20px;
+  }
   .fab {
     bottom: 70px;
     right: 16px;
@@ -643,6 +710,16 @@ textarea { resize: vertical; }
   }
   .editor-content {
     padding: 12px;
+  }
+  .password-input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .password-actions {
+    width: 100%;
+  }
+  .password-actions .btn {
+    flex: 1;
   }
   .editor-header {
     margin-bottom: 16px;

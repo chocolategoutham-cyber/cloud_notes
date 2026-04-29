@@ -139,11 +139,11 @@
             <span id="current-user" class="user-badge">User</span>
           </div>
           <div class="header-right">
-            <button class="btn btn-icon" id="lock-button" title="Lock vault">
-              <span>🔒</span>
+            <button class="btn btn-icon" id="lock-button" title="Lock vault" aria-label="Lock vault">
+              <span>Lock</span>
             </button>
-            <button class="btn btn-icon" id="logout-button" title="Logout">
-              <span>↪️</span>
+            <button class="btn btn-icon" id="logout-button" title="Logout" aria-label="Logout">
+              <span>Out</span>
             </button>
           </div>
         </header>
@@ -168,11 +168,26 @@
 
           <!-- Right Panel: Entry Editor -->
           <main class="vault-editor">
+            <section class="unlock-state" id="unlock-state" hidden>
+              <div class="unlock-card">
+                <p class="unlock-eyebrow">Vault locked</p>
+                <h2>Unlock your passwords</h2>
+                <p class="unlock-copy">Enter your vault password to view, search, and edit your saved entries.</p>
+                <form id="unlock-form" class="unlock-form">
+                  <div class="form-group">
+                    <label for="unlock-password">Vault Password</label>
+                    <input id="unlock-password" type="password" autocomplete="current-password" required />
+                  </div>
+                  <button class="btn btn-primary" type="submit">Unlock Vault</button>
+                </form>
+              </div>
+            </section>
+
             <!-- Empty State -->
             <div class="editor-empty" id="editor-empty">
               <div class="empty-state">
-                <p>👋 Welcome to Cloud Vault</p>
-                <p>Create a new password or select one from the list</p>
+                <p>Welcome to Cloud Vault</p>
+                <p>Create a new password entry or choose one from the list.</p>
               </div>
             </div>
 
@@ -199,9 +214,9 @@
                   <div class="password-input-group">
                     <input id="entry-password" type="password" autocomplete="new-password" />
                     <div class="password-actions">
-                      <button type="button" class="btn btn-sm" id="toggle-password-button">👁️</button>
-                      <button type="button" class="btn btn-sm" id="copy-password-button">📋</button>
-                      <button type="button" class="btn btn-sm" id="generate-password-button">🔄</button>
+                      <button type="button" class="btn btn-sm" id="toggle-password-button">Show</button>
+                      <button type="button" class="btn btn-sm" id="copy-password-button">Copy</button>
+                      <button type="button" class="btn btn-sm" id="generate-password-button">Generate</button>
                     </div>
                   </div>
                 </div>
@@ -227,8 +242,8 @@
 
         <!-- Bottom Bar with Actions -->
         <div class="bottom-bar">
-          <button class="btn btn-small" id="sync-button">💾 Save</button>
-          <button class="btn btn-small" id="register-passkey-button">🔑 Add Passkey</button>
+          <button class="btn btn-small" id="sync-button">Save Vault</button>
+          <button class="btn btn-small" id="register-passkey-button">Add Passkey</button>
           <span id="sync-status" class="sync-indicator">Ready</span>
         </div>
       </div>
