@@ -21,24 +21,27 @@
     <div id="auth-page" class="page active-page">
       <div class="auth-shell">
         <section class="auth-story">
-          <p class="eyebrow">Email OTP Vault</p>
-          <h1>Passwords, without the clutter.</h1>
-          <p class="story-copy">
-            Open your vault with a one-time code sent to email, then manage every password entry in one
-            clean workspace.
-          </p>
+          <div class="story-head">
+            <p class="eyebrow">Email OTP Vault</p>
+            <h1>Installable, private, and much less boring.</h1>
+            <p class="story-copy">
+              Open your password vault with one email code, then manage entries in a cleaner workspace that
+              feels good on mobile and desktop.
+            </p>
+          </div>
+
           <div class="story-grid">
             <article class="story-card">
-              <h2>One-step access</h2>
-              <p>No signup screens, no master password, no extra auth layers.</p>
+              <h2>Install from Brave</h2>
+              <p>Use the install button, or Brave’s menu, to add Cloud Vault straight to your home screen.</p>
             </article>
             <article class="story-card">
-              <h2>Fast editing</h2>
-              <p>Add, update, search, and delete entries from a single responsive dashboard.</p>
+              <h2>One save path</h2>
+              <p>Saving an entry now updates the actual vault instead of splitting the action into confusing buttons.</p>
             </article>
             <article class="story-card">
-              <h2>Cloudflare-backed</h2>
-              <p>Your session and vault stay synced through Workers and D1.</p>
+              <h2>Editor first</h2>
+              <p>The form leads the page now, with your vault list tucked to the side instead of pushing it down.</p>
             </article>
           </div>
         </section>
@@ -48,7 +51,11 @@
             <div class="auth-header">
               <p class="eyebrow">Private Access</p>
               <h2>Enter your email</h2>
-              <p>We’ll send a one-time code so you can open your vault.</p>
+              <p>We'll send a one-time code so you can open your vault.</p>
+            </div>
+
+            <div class="auth-toolbar">
+              <button class="btn btn-secondary install-button" data-install-app type="button">Install App</button>
             </div>
 
             <section id="email-step" class="auth-step active-step">
@@ -105,36 +112,20 @@
             <span id="current-email" class="user-badge">you@example.com</span>
           </div>
           <div class="header-actions">
+            <button class="btn btn-secondary install-button" data-install-app type="button">Install App</button>
             <button class="btn btn-primary" id="new-entry-button" type="button">New Entry</button>
             <button class="btn btn-secondary" id="logout-button" type="button">Logout</button>
           </div>
         </header>
 
         <div class="vault-container">
-          <aside class="vault-sidebar">
-            <div class="sidebar-section sidebar-summary">
-              <p class="eyebrow">Vault Index</p>
-              <div class="sidebar-heading-row">
-                <h2>Your Passwords</h2>
-                <span class="count-pill"><span id="entry-count">0</span> saved</span>
-              </div>
-              <p class="sidebar-caption">Search websites, usernames, and notes instantly.</p>
-            </div>
-
-            <div class="sidebar-section search-box">
-              <input id="search-input" type="search" placeholder="Search passwords..." />
-            </div>
-
-            <div class="entry-list" id="entry-list"></div>
-          </aside>
-
           <main class="vault-editor">
             <div class="editor-shell">
               <div class="editor-empty" id="editor-empty">
                 <div class="empty-state">
                   <p class="eyebrow">Ready</p>
                   <h2>Pick an entry or create a new one</h2>
-                  <p>Everything stays in one simple vault tied to your email session.</p>
+                  <p>The editor now stays at the top and center so the main action always comes first.</p>
                 </div>
               </div>
 
@@ -149,12 +140,12 @@
 
                 <form id="entry-form" class="entry-form">
                   <div class="field-grid">
-                    <div class="form-group field-website">
+                    <div class="form-group">
                       <label for="entry-website">Website</label>
                       <input id="entry-website" type="text" placeholder="example.com" required />
                     </div>
 
-                    <div class="form-group field-username">
+                    <div class="form-group">
                       <label for="entry-username">Username / Email</label>
                       <input id="entry-username" type="text" autocomplete="username" />
                     </div>
@@ -183,7 +174,7 @@
                     <textarea
                       id="entry-notes"
                       rows="8"
-                      placeholder="Add recovery info, hints, labels, or anything useful."
+                      placeholder="Add recovery info, labels, notes, or anything useful here."
                     ></textarea>
                   </div>
 
@@ -195,6 +186,23 @@
               </div>
             </div>
           </main>
+
+          <aside class="vault-sidebar">
+            <div class="sidebar-section sidebar-summary">
+              <p class="eyebrow">Vault Index</p>
+              <div class="sidebar-heading-row">
+                <h2>Your Passwords</h2>
+                <span class="count-pill"><span id="entry-count">0</span> saved</span>
+              </div>
+              <p class="sidebar-caption">Search websites, usernames, and notes instantly.</p>
+            </div>
+
+            <div class="sidebar-section search-box">
+              <input id="search-input" type="search" placeholder="Search passwords..." />
+            </div>
+
+            <div class="entry-list" id="entry-list"></div>
+          </aside>
         </div>
       </div>
     </div>

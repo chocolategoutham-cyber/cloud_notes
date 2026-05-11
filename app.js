@@ -11,6 +11,7 @@ const state = {
   search: "",
   isCreatingEntry: false,
   sessionToken: "",
+  installPrompt: null,
 };
 
 const refs = {
@@ -24,6 +25,7 @@ const refs = {
   otpInput: document.querySelector("#otp-input"),
   otpEmailLabel: document.querySelector("#otp-email-label"),
   devOtpHint: document.querySelector("#dev-otp-hint"),
+  installButtons: Array.from(document.querySelectorAll("[data-install-app]")),
   changeEmailButton: document.querySelector("#change-email-button"),
   currentEmail: document.querySelector("#current-email"),
   logoutButton: document.querySelector("#logout-button"),
@@ -58,6 +60,18 @@ async function initializeApp() {
 }
 
 function bindEvents() {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    state.installPrompt = event;
+    updateInstallButtons();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    state.installPrompt = null;
+    updateInstallButtons();
+    showToast("Cloud Vault installed.");
+  });
+
   refs.emailForm.addEventListener("submit", (event) => {
     event.preventDefault();
     void requestOtp();
@@ -73,6 +87,10 @@ function bindEvents() {
     refs.otpForm.reset();
     refs.devOtpHint.hidden = true;
     render();
+  });
+
+  refs.installButtons.forEach((button) => {
+    button.addEventListener("click", () => void installApp());
   });
 
   refs.otpInput.addEventListener("input", () => {
@@ -111,6 +129,8 @@ function bindEvents() {
     refs.togglePasswordButton.textContent = "Hide";
     showToast("Strong password generated.");
   });
+
+  updateInstallButtons();
 }
 
 async function hydrateSession() {
@@ -226,6 +246,24 @@ async function logout() {
   });
 }
 
+async function installApp() {
+  if (isStandaloneMode()) {
+    showToast("Cloud Vault is already installed.");
+    return;
+  }
+
+  if (state.installPrompt) {
+    const promptEvent = state.installPrompt;
+    state.installPrompt = null;
+    await promptEvent.prompt();
+    await promptEvent.userChoice.catch(() => undefined);
+    updateInstallButtons();
+    return;
+  }
+
+  showToast("In Brave, open the menu and tap Add to Home screen or Install app.");
+}
+
 function startNewEntry() {
   if (!state.vault) {
     return;
@@ -316,6 +354,7 @@ function render() {
   refs.vaultPage.classList.toggle("active-page", loggedIn);
   refs.emailStep.classList.toggle("active-step", state.authStep === "email");
   refs.otpStep.classList.toggle("active-step", state.authStep === "otp");
+  updateInstallButtons();
 
   if (!loggedIn) {
     return;
@@ -505,6 +544,17 @@ function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => undefined);
   }
+}
+
+function isStandaloneMode() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function updateInstallButtons() {
+  const installed = isStandaloneMode();
+  refs.installButtons.forEach((button) => {
+    button.hidden = installed;
+  });
 }
 
 function getStoredSessionToken() {

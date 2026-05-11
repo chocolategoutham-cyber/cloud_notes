@@ -1,20 +1,19 @@
 :root {
-  --bg: #eef3fb;
-  --bg-deep: #dde6f6;
+  --bg: #f6efe6;
+  --bg-strong: #e8eef8;
   --surface: rgba(255, 255, 255, 0.88);
   --surface-strong: #ffffff;
-  --ink: #10213c;
-  --ink-soft: #5e6d86;
-  --ink-faint: #8d99ad;
+  --ink: #14233f;
+  --ink-soft: #5d6a81;
   --accent: #0f62fe;
   --accent-deep: #0b4fd1;
-  --accent-soft: #d9e7ff;
+  --accent-soft: #dce7ff;
   --danger: #c92a2a;
   --danger-soft: #fde6e6;
-  --border: rgba(126, 145, 173, 0.28);
-  --shadow-xl: 0 30px 60px rgba(16, 33, 60, 0.16);
-  --shadow-lg: 0 18px 38px rgba(16, 33, 60, 0.12);
-  --shadow-md: 0 10px 24px rgba(16, 33, 60, 0.08);
+  --border: rgba(124, 145, 176, 0.26);
+  --shadow-xl: 0 28px 60px rgba(20, 35, 63, 0.16);
+  --shadow-lg: 0 18px 40px rgba(20, 35, 63, 0.12);
+  --shadow-md: 0 10px 24px rgba(20, 35, 63, 0.08);
   --radius-2xl: 30px;
   --radius-xl: 24px;
   --radius-lg: 18px;
@@ -37,9 +36,9 @@ body {
   min-height: 100vh;
   color: var(--ink);
   background:
-    radial-gradient(circle at top left, rgba(15, 98, 254, 0.14), transparent 34%),
-    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.16), transparent 28%),
-    linear-gradient(180deg, #f4f7fc 0%, #e8eef8 100%);
+    radial-gradient(circle at top left, rgba(15, 98, 254, 0.18), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.16), transparent 26%),
+    linear-gradient(180deg, #f8f2e8 0%, #edf4fc 58%, #e6edf8 100%);
 }
 
 button,
@@ -59,7 +58,7 @@ textarea {
   padding: 0.95rem 1rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.96);
   color: var(--ink);
   transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
 }
@@ -67,7 +66,7 @@ textarea {
 input:focus,
 textarea:focus {
   outline: none;
-  border-color: rgba(15, 98, 254, 0.42);
+  border-color: rgba(15, 98, 254, 0.44);
   box-shadow: 0 0 0 4px rgba(15, 98, 254, 0.12);
 }
 
@@ -109,9 +108,10 @@ label {
 .auth-shell {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 460px);
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 460px);
   gap: 28px;
   padding: 28px;
+  align-items: start;
 }
 
 .auth-story,
@@ -120,31 +120,38 @@ label {
 .vault-sidebar,
 .editor-shell {
   background: var(--surface);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.84);
   box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(18px);
 }
 
 .auth-story {
   border-radius: var(--radius-2xl);
-  padding: 40px;
+  padding: 42px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 540px;
+  min-height: 560px;
+}
+
+.story-head {
+  display: grid;
+  gap: 12px;
 }
 
 .auth-story h1 {
   max-width: 8ch;
-  font-size: clamp(2.8rem, 6vw, 4.7rem);
+  font-size: clamp(2.9rem, 6vw, 4.8rem);
   line-height: 0.95;
-  margin-top: 10px;
 }
 
-.story-copy {
-  max-width: 34rem;
-  margin-top: 18px;
-  font-size: 1.08rem;
+.story-copy,
+.story-card p,
+.form-hint,
+.sidebar-caption,
+.editor-date,
+.empty-state p,
+.otp-copy p:not(.otp-target) {
   color: var(--ink-soft);
 }
 
@@ -152,29 +159,24 @@ label {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
-  margin-top: 24px;
 }
 
 .story-card {
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(126, 145, 173, 0.16);
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(124, 145, 176, 0.16);
   padding: 18px;
 }
 
 .story-card h2 {
-  font-size: 1.02rem;
+  font-size: 1rem;
   margin-bottom: 8px;
-}
-
-.story-card p {
-  color: var(--ink-soft);
-  line-height: 1.55;
 }
 
 .auth-panel {
   display: flex;
-  align-items: center;
+  align-items: start;
+  justify-content: center;
 }
 
 .auth-card {
@@ -182,27 +184,24 @@ label {
   border-radius: var(--radius-2xl);
   padding: 32px;
   box-shadow: var(--shadow-xl);
+  position: sticky;
+  top: 28px;
 }
 
 .auth-header {
   display: grid;
   gap: 8px;
-  margin-bottom: 22px;
+  margin-bottom: 16px;
 }
 
 .auth-header h2 {
   font-size: 2rem;
 }
 
-.auth-header p,
-.form-hint,
-.sidebar-caption,
-.editor-date,
-.dev-hint,
-.story-card p,
-.empty-state p,
-.otp-copy p:not(.otp-target) {
-  color: var(--ink-soft);
+.auth-toolbar {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 18px;
 }
 
 .auth-step {
@@ -268,6 +267,10 @@ label {
 .btn-sm {
   min-height: 38px;
   padding: 0.65rem 0.9rem;
+}
+
+.install-button {
+  width: fit-content;
 }
 
 .otp-copy {
@@ -341,16 +344,24 @@ label {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.18fr) minmax(290px, 360px);
+  grid-template-areas: "editor sidebar";
   gap: 18px;
 }
 
+.vault-editor {
+  grid-area: editor;
+  min-height: 0;
+}
+
 .vault-sidebar {
+  grid-area: sidebar;
   border-radius: var(--radius-xl);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: calc(100vh - 148px);
 }
 
 .sidebar-section {
@@ -416,19 +427,23 @@ label {
   height: 100%;
   min-height: 0;
   border-radius: var(--radius-xl);
-  padding: 22px;
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 .editor-empty,
 .editor-content {
-  height: 100%;
+  width: min(100%, 860px);
 }
 
 .editor-empty {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   text-align: center;
+  padding-top: 52px;
 }
 
 .empty-state {
@@ -489,7 +504,7 @@ label {
   transform: translateX(-50%) translateY(120px);
   min-width: 220px;
   max-width: calc(100vw - 24px);
-  background: rgba(16, 33, 60, 0.96);
+  background: rgba(20, 35, 63, 0.96);
   color: #fff;
   border-radius: 999px;
   padding: 0.92rem 1.1rem;
@@ -507,16 +522,23 @@ label {
     grid-template-columns: 1fr;
   }
 
-  .auth-story {
-    min-height: auto;
-  }
-
   .story-grid {
     grid-template-columns: 1fr;
   }
 
+  .auth-story {
+    min-height: auto;
+  }
+
   .vault-container {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "editor"
+      "sidebar";
+  }
+
+  .vault-sidebar {
+    max-height: none;
   }
 }
 
@@ -540,15 +562,17 @@ label {
     padding: 20px;
   }
 
+  .auth-card {
+    position: static;
+  }
+
   .vault-header {
     padding: 16px;
   }
 
   .header-actions,
   .sidebar-heading-row,
-  .editor-header,
-  .field-grid {
-    grid-template-columns: 1fr;
+  .editor-header {
     flex-direction: column;
     align-items: stretch;
   }
@@ -558,7 +582,11 @@ label {
   }
 
   .field-grid {
-    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .install-button {
+    width: 100%;
   }
 
   .password-actions .btn,
