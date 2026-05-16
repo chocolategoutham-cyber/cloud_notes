@@ -286,21 +286,66 @@ async function loadVault(env, emailUserId) {
 
 function sanitizeVault(vault) {
   if (!vault || typeof vault !== "object" || !Array.isArray(vault.entries)) {
-    return { version: 1, entries: [] };
+    return { version: 2, entries: [] };
   }
 
   return {
-    version: 1,
-    entries: vault.entries.map((entry) => ({
-      id: String(entry.id || crypto.randomUUID()),
-      website: String(entry.website || ""),
-      username: String(entry.username || ""),
-      password: String(entry.password || ""),
-      notes: String(entry.notes || ""),
-      createdAt: String(entry.createdAt || new Date().toISOString()),
-      updatedAt: String(entry.updatedAt || new Date().toISOString()),
-    })),
+    version: 2,
+    entries: vault.entries.map((entry) => sanitizeEntry(entry)).filter(Boolean),
   };
+}
+
+function sanitizeEntry(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const now = new Date().toISOString();
+  const looksLegacy = "website" in entry || "username" in entry || "password" in entry;
+
+  if (looksLegacy) {
+    return {
+      id: String(entry.id || crypto.randomUUID()),
+      type: "password",
+      title: String(entry.website || "Untitled Password"),
+      notes: String(entry.notes || ""),
+      tags: [],
+      isFavorite: false,
+      fields: {
+        username: String(entry.username || ""),
+        password: String(entry.password || ""),
+        url: String(entry.url || ""),
+      },
+      createdAt: String(entry.createdAt || now),
+      updatedAt: String(entry.updatedAt || now),
+    };
+  }
+
+  const type = sanitizeType(entry.type);
+  const fields = {};
+  const sourceFields = entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+  for (const [key, value] of Object.entries(sourceFields)) {
+    fields[String(key)] = String(value || "");
+  }
+
+  return {
+    id: String(entry.id || crypto.randomUUID()),
+    type,
+    title: String(entry.title || "Untitled Record"),
+    notes: String(entry.notes || ""),
+    tags: Array.isArray(entry.tags)
+      ? entry.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 8)
+      : [],
+    isFavorite: Boolean(entry.isFavorite),
+    fields,
+    createdAt: String(entry.createdAt || now),
+    updatedAt: String(entry.updatedAt || now),
+  };
+}
+
+function sanitizeType(type) {
+  const allowed = new Set(["password", "card", "banking", "document", "api", "wifi", "note", "emergency"]);
+  return allowed.has(type) ? type : "password";
 }
 
 async function sendOtpEmail(env, email, code) {

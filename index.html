@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Cloud Vault is an email OTP password vault powered by Cloudflare."
+      content="Cloud Vault is a personal secure vault for passwords, notes, cards, documents, and more."
     />
     <meta name="theme-color" content="#10233f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -23,25 +23,25 @@
         <section class="auth-story">
           <div class="story-head">
             <p class="eyebrow">Email OTP Vault</p>
-            <h1>Installable, private, and much less boring.</h1>
+            <h1>Your private pocket archive.</h1>
             <p class="story-copy">
-              Open your password vault with one email code, then manage entries in a cleaner workspace that
-              feels good on mobile and desktop.
+              Open the vault with one email code, then keep passwords, cards, bank details, documents,
+              Wi-Fi, API keys, and personal notes in one place.
             </p>
           </div>
 
           <div class="story-grid">
             <article class="story-card">
+              <h2>More than passwords</h2>
+              <p>Save banking details, cards, documents, Wi-Fi, private notes, and other secure records.</p>
+            </article>
+            <article class="story-card">
               <h2>Install from Brave</h2>
-              <p>Use the install button, or Brave’s menu, to add Cloud Vault straight to your home screen.</p>
+              <p>Use the install button, or Brave's menu, to add Cloud Vault straight to your home screen.</p>
             </article>
             <article class="story-card">
-              <h2>One save path</h2>
-              <p>Saving an entry now updates the actual vault instead of splitting the action into confusing buttons.</p>
-            </article>
-            <article class="story-card">
-              <h2>Editor first</h2>
-              <p>The form leads the page now, with your vault list tucked to the side instead of pushing it down.</p>
+              <h2>One secure workspace</h2>
+              <p>Use quick templates and one clean editor instead of juggling several note apps for private data.</p>
             </article>
           </div>
         </section>
@@ -51,7 +51,7 @@
             <div class="auth-header">
               <p class="eyebrow">Private Access</p>
               <h2>Enter your email</h2>
-              <p>We'll send a one-time code so you can open your vault.</p>
+              <p>We'll send a one-time code so only you can open the vault.</p>
             </div>
 
             <div class="auth-toolbar">
@@ -107,13 +107,13 @@
       <div class="vault-page-wrapper">
         <header class="vault-header">
           <div class="header-left">
-            <p class="eyebrow">Vault Workspace</p>
+            <p class="eyebrow">Personal Secure Vault</p>
             <h1>Cloud Vault</h1>
             <span id="current-email" class="user-badge">you@example.com</span>
           </div>
           <div class="header-actions">
             <button class="btn btn-secondary install-button" data-install-app type="button">Install App</button>
-            <button class="btn btn-primary" id="new-entry-button" type="button">New Entry</button>
+            <button class="btn btn-primary" id="new-entry-button" type="button">New Record</button>
             <button class="btn btn-secondary" id="logout-button" type="button">Logout</button>
           </div>
         </header>
@@ -123,63 +123,59 @@
             <div class="editor-shell">
               <div class="editor-empty" id="editor-empty">
                 <div class="empty-state">
-                  <p class="eyebrow">Ready</p>
-                  <h2>Open a saved password or start a fresh one</h2>
-                  <p>Your selected entry appears here, with the full form front and center.</p>
+                  <p class="eyebrow">Start Here</p>
+                  <h2>Choose a record type and make this vault useful.</h2>
+                  <p>Store the private things you actually need: passwords, cards, documents, APIs, Wi-Fi, and more.</p>
+                  <div class="template-grid" id="template-grid"></div>
                 </div>
               </div>
 
               <div class="editor-content" id="editor-content" hidden>
                 <div class="editor-header">
                   <div>
-                    <p class="eyebrow">Password Entry</p>
-                    <h2 id="editor-title">New Entry</h2>
+                    <p class="eyebrow" id="editor-type-label">Secure Record</p>
+                    <h2 id="editor-title">New Record</h2>
                   </div>
-                  <span id="editor-updated" class="editor-date">Unsaved</span>
+                  <div class="editor-header-meta">
+                    <button class="btn btn-secondary btn-sm favorite-button" id="favorite-button" type="button">
+                      Mark Favorite
+                    </button>
+                    <span id="editor-updated" class="editor-date">Unsaved</span>
+                  </div>
                 </div>
 
                 <form id="entry-form" class="entry-form">
-                  <div class="field-grid">
+                  <div class="editor-top-grid">
                     <div class="form-group">
-                      <label for="entry-website">Website</label>
-                      <input id="entry-website" type="text" placeholder="example.com" required />
+                      <label for="entry-type">Record Type</label>
+                      <select id="entry-type"></select>
                     </div>
 
                     <div class="form-group">
-                      <label for="entry-username">Username / Email</label>
-                      <input id="entry-username" type="text" autocomplete="username" />
+                      <label for="entry-tags">Tags</label>
+                      <input id="entry-tags" type="text" placeholder="finance, work, home" />
                     </div>
                   </div>
 
                   <div class="form-group">
-                    <label for="entry-password">Password</label>
-                    <div class="password-input-group">
-                      <input id="entry-password" type="password" autocomplete="off" />
-                      <div class="password-actions">
-                        <button type="button" class="btn btn-secondary btn-sm" id="toggle-password-button">
-                          Show
-                        </button>
-                        <button type="button" class="btn btn-secondary btn-sm" id="copy-password-button">
-                          Copy
-                        </button>
-                        <button type="button" class="btn btn-secondary btn-sm" id="generate-password-button">
-                          Generate
-                        </button>
-                      </div>
-                    </div>
+                    <label for="entry-title-input" id="entry-title-label">Title</label>
+                    <input id="entry-title-input" type="text" placeholder="Record name" required />
+                    <p class="field-hint" id="entry-type-hint"></p>
                   </div>
+
+                  <div id="dynamic-fields" class="dynamic-fields"></div>
 
                   <div class="form-group">
                     <label for="entry-notes">Notes</label>
                     <textarea
                       id="entry-notes"
                       rows="8"
-                      placeholder="Add recovery info, labels, notes, or anything useful here."
+                      placeholder="Add extra instructions, backup info, or anything useful here."
                     ></textarea>
                   </div>
 
                   <div class="editor-actions">
-                    <button class="btn btn-primary" type="submit">Save Entry</button>
+                    <button class="btn btn-primary" type="submit">Save Record</button>
                     <button type="button" class="btn btn-danger" id="delete-entry-button">Delete</button>
                   </div>
                 </form>
@@ -191,14 +187,20 @@
             <div class="sidebar-section sidebar-summary">
               <p class="eyebrow">Vault Index</p>
               <div class="sidebar-heading-row">
-                <h2>Your Passwords</h2>
+                <h2>Your Records</h2>
                 <span class="count-pill"><span id="entry-count">0</span> saved</span>
               </div>
-              <p class="sidebar-caption">Search websites, usernames, and notes instantly.</p>
+              <p class="sidebar-caption">Search titles, tags, field values, and notes instantly.</p>
+              <div class="type-chip-list" id="type-chip-list"></div>
+            </div>
+
+            <div class="sidebar-section quick-actions">
+              <p class="eyebrow">Quick Add</p>
+              <div class="quick-template-list" id="quick-template-list"></div>
             </div>
 
             <div class="sidebar-section search-box">
-              <input id="search-input" type="search" placeholder="Search passwords..." />
+              <input id="search-input" type="search" placeholder="Search records..." />
             </div>
 
             <div class="entry-list" id="entry-list"></div>
