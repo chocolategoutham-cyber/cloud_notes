@@ -113,6 +113,8 @@
           </div>
           <div class="header-actions">
             <button class="btn btn-secondary install-button" data-install-app type="button">Install App</button>
+            <button class="btn btn-secondary" id="import-button" type="button">Import</button>
+            <button class="btn btn-secondary" id="export-button" type="button">Export</button>
             <button class="btn btn-primary" id="new-entry-button" type="button">New Record</button>
             <button class="btn btn-secondary" id="logout-button" type="button">Logout</button>
           </div>
@@ -137,6 +139,9 @@
                     <h2 id="editor-title">New Record</h2>
                   </div>
                   <div class="editor-header-meta">
+                    <button class="btn btn-secondary btn-sm" id="duplicate-entry-button" type="button">
+                      Duplicate
+                    </button>
                     <button class="btn btn-secondary btn-sm favorite-button" id="favorite-button" type="button">
                       Mark Favorite
                     </button>
@@ -210,6 +215,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <input id="import-file-input" type="file" accept="application/json" hidden />
     <script src="./app.js" defer></script>
   </body>
 </html>

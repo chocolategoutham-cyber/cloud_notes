@@ -124,6 +124,7 @@ const state = {
   sessionToken: "",
   installPrompt: null,
   editorType: DEFAULT_TYPE,
+  activeTypeFilter: "all",
 };
 
 const refs = {
@@ -141,6 +142,9 @@ const refs = {
   changeEmailButton: document.querySelector("#change-email-button"),
   currentEmail: document.querySelector("#current-email"),
   logoutButton: document.querySelector("#logout-button"),
+  importButton: document.querySelector("#import-button"),
+  exportButton: document.querySelector("#export-button"),
+  importFileInput: document.querySelector("#import-file-input"),
   searchInput: document.querySelector("#search-input"),
   entryCount: document.querySelector("#entry-count"),
   entryList: document.querySelector("#entry-list"),
@@ -150,6 +154,7 @@ const refs = {
   editorTypeLabel: document.querySelector("#editor-type-label"),
   editorTitle: document.querySelector("#editor-title"),
   editorUpdated: document.querySelector("#editor-updated"),
+  duplicateEntryButton: document.querySelector("#duplicate-entry-button"),
   favoriteButton: document.querySelector("#favorite-button"),
   entryForm: document.querySelector("#entry-form"),
   entryType: document.querySelector("#entry-type"),
@@ -217,6 +222,9 @@ function bindEvents() {
   });
 
   refs.logoutButton.addEventListener("click", () => void logout());
+  refs.importButton.addEventListener("click", () => refs.importFileInput.click());
+  refs.exportButton.addEventListener("click", () => exportVault());
+  refs.importFileInput.addEventListener("change", (event) => void importVault(event));
   refs.searchInput.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
     renderEntryList();
@@ -227,6 +235,7 @@ function bindEvents() {
     void saveEntry();
   });
   refs.deleteEntryButton.addEventListener("click", () => void deleteEntry());
+  refs.duplicateEntryButton.addEventListener("click", () => duplicateEntry());
 
   refs.entryType.addEventListener("change", () => {
     const current = collectEditorValues();
@@ -400,6 +409,7 @@ async function verifyOtp() {
     state.selectedId = state.vault.entries[0]?.id ?? null;
     state.isCreatingEntry = !state.vault.entries.length;
     state.editorType = state.vault.entries[0]?.type || DEFAULT_TYPE;
+    state.activeTypeFilter = "all";
     state.search = "";
     refs.searchInput.value = "";
     refs.emailForm.reset();
@@ -454,6 +464,32 @@ function startNewEntry(type = DEFAULT_TYPE) {
   state.editorType = type;
   renderEditor();
   refs.entryTitleInput.focus();
+}
+
+function duplicateEntry() {
+  const entry = getSelectedEntry();
+  if (!entry || !state.vault) {
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const duplicate = {
+    ...entry,
+    id: crypto.randomUUID(),
+    title: `${entry.title} Copy`,
+    fields: { ...(entry.fields || {}) },
+    isFavorite: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  state.vault.entries.unshift(duplicate);
+  sortEntries(state.vault.entries);
+  state.selectedId = duplicate.id;
+  state.isCreatingEntry = false;
+  state.editorType = duplicate.type;
+  void persistVault("Record duplicated.");
+  render();
 }
 
 async function saveEntry() {
@@ -552,22 +588,41 @@ function render() {
 }
 
 function renderTypeCounts() {
+  const typesInVault = new Set(state.vault.entries.map((entry) => entry.type));
   const counts = new Map();
   for (const entry of state.vault.entries) {
     counts.set(entry.type, (counts.get(entry.type) || 0) + 1);
   }
 
   refs.typeChipList.innerHTML = "";
-  if (!counts.size) {
-    return;
-  }
+
+  refs.typeChipList.append(createFilterChip("all", `All: ${state.vault.entries.length}`, state.activeTypeFilter === "all"));
 
   for (const [type, count] of counts.entries()) {
-    const chip = document.createElement("span");
-    chip.className = "type-chip";
-    chip.textContent = `${getEntryTypeConfig(type).label}: ${count}`;
-    refs.typeChipList.append(chip);
+    refs.typeChipList.append(
+      createFilterChip(type, `${getEntryTypeConfig(type).label}: ${count}`, state.activeTypeFilter === type)
+    );
   }
+
+  if (!typesInVault.size) {
+    for (const [type, config] of Object.entries(ENTRY_TYPES)) {
+      refs.typeChipList.append(createFilterChip(type, config.label, false));
+    }
+  }
+}
+
+function createFilterChip(type, label, isActive) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "type-chip";
+  button.classList.toggle("is-active", isActive);
+  button.textContent = label;
+  button.addEventListener("click", () => {
+    state.activeTypeFilter = type;
+    renderEntryList();
+    renderTypeCounts();
+  });
+  return button;
 }
 
 function renderEntryList() {
@@ -751,12 +806,15 @@ function collectEditorValues() {
 }
 
 function visibleEntries() {
-  const entries = state.vault?.entries || [];
-  if (!state.search) {
-    return entries;
-  }
+  const entries = (state.vault?.entries || []).filter((entry) => {
+    if (state.activeTypeFilter !== "all" && entry.type !== state.activeTypeFilter) {
+      return false;
+    }
 
-  return entries.filter((entry) => {
+    if (!state.search) {
+      return true;
+    }
+
     const haystack = [
       entry.title,
       entry.notes,
@@ -769,6 +827,8 @@ function visibleEntries() {
 
     return haystack.includes(state.search);
   });
+
+  return entries;
 }
 
 function getSelectedEntry() {
@@ -905,6 +965,84 @@ function resetSessionState() {
   state.search = "";
   state.isCreatingEntry = false;
   state.editorType = DEFAULT_TYPE;
+  state.activeTypeFilter = "all";
+}
+
+function exportVault() {
+  if (!state.vault) {
+    return;
+  }
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    vault: state.vault,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `cloud-vault-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  showToast("Vault exported.");
+}
+
+async function importVault(event) {
+  if (!state.vault) {
+    return;
+  }
+
+  const file = event.target.files?.[0];
+  refs.importFileInput.value = "";
+  if (!file) {
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const incomingVault = sanitizeVault(parsed.vault || parsed);
+    const merged = mergeVaultEntries(state.vault.entries, incomingVault.entries);
+    state.vault = { version: 2, entries: merged };
+    state.selectedId = state.vault.entries[0]?.id ?? null;
+    state.isCreatingEntry = !state.vault.entries.length;
+    await persistVault("Vault imported.");
+    render();
+  } catch {
+    showToast("Import failed. Use a valid Cloud Vault JSON file.");
+  }
+}
+
+function mergeVaultEntries(currentEntries, importedEntries) {
+  const merged = new Map();
+
+  for (const entry of currentEntries) {
+    merged.set(entry.id, sanitizeEntry(entry));
+  }
+
+  for (const entry of importedEntries) {
+    const clean = sanitizeEntry(entry);
+    if (!clean) {
+      continue;
+    }
+
+    const existing = merged.get(clean.id);
+    if (!existing) {
+      merged.set(clean.id, clean);
+      continue;
+    }
+
+    const existingTime = Date.parse(existing.updatedAt || 0);
+    const incomingTime = Date.parse(clean.updatedAt || 0);
+    if (incomingTime >= existingTime) {
+      merged.set(clean.id, clean);
+    }
+  }
+
+  const entries = Array.from(merged.values());
+  sortEntries(entries);
+  return entries;
 }
 
 async function withLoading(task) {
